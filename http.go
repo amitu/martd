@@ -53,7 +53,7 @@ func PubHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	ch, err := NewChannel(channel, size, life, one2one, key)
+	ch, err := GetOrCreateChannel(channel, size, life, one2one, key)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 	}
@@ -73,6 +73,42 @@ func PubHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "%s\n", j)
 }
 
+func SubHandler(w http.ResponseWriter, r *http.Request) {
+	channel := r.FormValue("channel")
+	if channel == "" {
+		http.Error(w, "channel is required", http.StatusBadRequest)
+		return
+	}
+
+	cid := r.FormValue("cid")
+	if cid == "" {
+		http.Error(w, "client id(cid) is required", http.StatusBadRequest)
+		return
+	}
+
+	cner, ok := w.(http.CloseNotifier)
+	if !ok {
+		http.Error(w, "channel is required", http.StatusBadRequest)
+		return
+	}
+
+	ch := GetChannel(channel)
+	sub := ch.Subscribe(cid)
+
+	select {
+	case m := <-sub:
+		if m == nil {
+			// new guy came with same client id, kill this connection
+			fmt.Fprintf(w, "oops, new client")
+		} else {
+			w.Write(m.Data)
+		}
+	case <-cner.CloseNotify():
+		fmt.Println("closed")
+		ch.UnSubscribe(cid)
+	}
+}
+
 func OKHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "ok")
 }
@@ -80,7 +116,7 @@ func OKHandler(w http.ResponseWriter, r *http.Request) {
 func ServeHTTP() {
 	http.HandleFunc("/", OKHandler)
 	http.HandleFunc("/pub", PubHandler)
-	http.HandleFunc("/sub", OKHandler)
+	http.HandleFunc("/sub", SubHandler)
 	http.HandleFunc("/stats", OKHandler)
 	http.HandleFunc("/client.js", OKHandler)
 	http.HandleFunc("/iframe.html", OKHandler)

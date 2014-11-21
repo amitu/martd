@@ -143,3 +143,5 @@ is being used with prod, you can pass your own SSL certificate.
 References:
 
 https://github.com/wandenberg/nginx-push-stream-module/tree/master/docs/examples
+https://groups.google.com/forum/#!topic/golang-nuts/rY4KoouaQu4
+https://gist.github.com/nono/1048668
