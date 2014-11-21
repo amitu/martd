@@ -26,7 +26,7 @@ func PubHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	channel := r.FormValue("channel")
+	channel := r.FormValue("channel") // TODO: support multiple channels
 	size_s := r.FormValue("size")
 	life_s := r.FormValue("life")
 	one2one := r.FormValue("one2one") == "true"
@@ -90,6 +90,14 @@ func SubHandler(w http.ResponseWriter, r *http.Request) {
 	if etag_s == "" {
 		etag_s = r.Header.Get("If-None-Match")
 	}
+
+	// TODO: whats the symantics for etag=0? the whole point of keeping old
+	// messages is to send them to clients[1]. if we do that then there can be
+	// duplicates. but if we dont do that then there can be data loss.
+	//
+	// one can argue that [1] is not correct and point is to not lose data mid
+	// stream, eg get 1 and 3 but not 2 (unless of course 2 has expired by the
+	// time 2nd request comes (which we cant help, increase life))
 
 	etag := int64(0)
 	if etag_s != "" {

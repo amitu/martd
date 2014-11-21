@@ -48,7 +48,7 @@ Supports both HTTP and HTTPS.
 Browser, or other clients connect to martd and wait for events. A JS library
 is available as part of this server, /client.js.
 
-The emphasis is on supporting all possible clients browsers.
+The emphasis is on supporting all possible clients/browsers.
 
 Clients wait on data on "channels". Channels have data retention, and client
 related attributes. Channels are created on from server side, IP whitelisting,
@@ -69,9 +69,10 @@ A demo will be available at http://martd.amitu.com
 Client API
 
 
-handle = martd.sub("channel", function(){/* subscribed */});
-martd.unsub("channel", function(){/* unsubscribed */});
-handle = martd.on(function(d){});
+handle = martd.sub("channel", function(){ /*subscribed*/ }, etag /*optional*/);
+martd.unsub("channel", function(){ /*unsubscribed*/ });
+handle = martd.on("ch", function(d){}); // .on() should be called before .sub()
+martd.pub(channel, key, data)
 
 handle.cancel() cancles subscription and data binding.
 

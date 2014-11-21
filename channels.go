@@ -102,7 +102,7 @@ func (c *Channel) Sub(cid string, etag int64) (chan *Message, *Message) {
 		ml := c.Messages.Length()
 
 		if etag != 0 && ml != 0 {
-			// find the first message in the channel with etag greater than this.
+			// find the first message in the channel with etag == this.
 			for i := uint(0); i < ml-1; i++ {
 				ith, _ := c.Messages.Ith(i)
 				if etag == ith.Created {
