@@ -1,6 +1,8 @@
 package main
 
 import (
+	"encoding/json"
+	"fmt"
 	"sync"
 	"time"
 )
@@ -11,27 +13,52 @@ type Message struct {
 }
 
 type Channel struct {
-	Name     string
-	Size     uint
-	Life     time.Duration
-	Key      string
-	Clients  ClientList
-	Messages *CircularMessageArray
-	One2One  bool
-	lock     sync.RWMutex
+	Name     string                `json:"name"`
+	Size     uint                  `json:"size"`
+	Life     time.Duration         `json:"life"`
+	Key      string                `json:"key,omitempty"`
+	Clients  ClientList            `json:"-"`
+	Messages *CircularMessageArray `json:"-"`
+	One2One  bool                  `json:"one2one"`
+	lock     sync.RWMutex          `json:"-"`
 }
 
-func NewChannel(name string, size uint) *Channel {
-	return &Channel{
-		Name:     name,
-		Size:     size,
-		Messages: NewCircularMessageArray(size),
-		Life:     time.Second * 10,
-		One2One:  false,
+var (
+	Channels    map[string]*Channel
+	ChannelLock sync.RWMutex
+)
+
+func init() {
+	Channels = make(map[string]*Channel)
+}
+
+func NewChannel(
+	name string, size uint, life time.Duration, one2one bool, key string,
+) (*Channel, error) {
+	ChannelLock.Lock()
+	defer ChannelLock.Unlock()
+
+	ch, ok := Channels[name]
+	if !ok {
+		ch = &Channel{
+			Name:     name,
+			Size:     size,
+			Messages: NewCircularMessageArray(size),
+			Life:     life,
+			One2One:  one2one,
+			Key:      key,
+		}
+		Channels[name] = ch
+
+		// Spaws a goroutine to delete this channel?
 	}
+
+	j, _ := json.MarshalIndent(Channels, " ", "    ")
+	fmt.Println("After New", string(j))
+	return ch, nil
 }
 
-func (c *Channel) Publish(data []byte) {
+func (c *Channel) Publish(data []byte) error {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
@@ -44,6 +71,9 @@ func (c *Channel) Publish(data []byte) {
 			c.RemoveClient(client)
 		}
 	}
+
+	fmt.Println("After publish", *c.Messages)
+	return nil
 }
 
 func (c *Channel) AddClient(client Client) error {
@@ -52,4 +82,8 @@ func (c *Channel) AddClient(client Client) error {
 
 func (c *Channel) RemoveClient(client Client) error {
 	return nil
+}
+
+func (c *Channel) Json() ([]byte, error) {
+	return json.MarshalIndent(c, " ", "    ")
 }

@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/amitu/gutils"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -19,6 +20,12 @@ func init() {
 }
 
 func PubHandler(w http.ResponseWriter, r *http.Request) {
+	body, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
 	channel := r.FormValue("channel")
 	size_s := r.FormValue("size")
 	life_s := r.FormValue("life")
@@ -30,7 +37,7 @@ func PubHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	size := 10
+	size := uint(10)
 	if size_s != "" {
 		_, err := fmt.Sscan(size_s, &size)
 		if err != nil {
@@ -46,7 +53,24 @@ func PubHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	fmt.Fprintf(w, "ok")
+	ch, err := NewChannel(channel, size, life, one2one, key)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+	}
+
+	if len(body) != 0 {
+		err := ch.Publish(body)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+		}
+	}
+
+	j, err := ch.Json()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+	}
+
+	fmt.Fprintf(w, "%s\n", j)
 }
 
 func OKHandler(w http.ResponseWriter, r *http.Request) {
