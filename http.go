@@ -107,6 +107,8 @@ func SubHandler(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("closed")
 		ch.UnSubscribe(cid)
 	}
+
+	// TODO: etag handling
 }
 
 func OKHandler(w http.ResponseWriter, r *http.Request) {

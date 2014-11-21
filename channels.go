@@ -83,11 +83,16 @@ func (c *Channel) Publish(data []byte) error {
 		client <- m
 	}
 
+	c.Clients = make(map[string]chan *Message)
+
 	fmt.Println("After publish", *c.Messages)
 	return nil
 }
 
 func (c *Channel) Subscribe(cid string) chan *Message {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
 	existing, ok := c.Clients[cid]
 	if ok {
 		existing <- nil
@@ -98,6 +103,9 @@ func (c *Channel) Subscribe(cid string) chan *Message {
 }
 
 func (c *Channel) UnSubscribe(cid string) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
 	delete(c.Clients, cid)
 }
 
