@@ -1,4 +1,4 @@
-About
+martd
 =====
 
 
@@ -8,28 +8,8 @@ martd is a push server.
 
 
 
-Use cases
 
-
-- Live Local, single data point, connected or not connected, can change anytime.
-- Live: isOn
-- Automate dashboard: new session, session state change.
-- Signalling server, one2one. one or more data points, life ~ 10s. Each peer
-  directly publishes
-
-
-Load estimate:
-
-peaks of ~600-900/sec
-
-900 * 20 * 1kb = 18mb
-
-
-
-
-
-
-Why not socketio/websocket?
+## Why not socketio/websocket?
 
 
 Websocket requires server code. This is meant to be a pluggable solution.
@@ -39,7 +19,7 @@ Websocket requires server code. This is meant to be a pluggable solution.
 
 
 
-How it works?
+## How it works?
 
 
 martd could be hosted behind nginx, or can run as a standalone server. 
@@ -66,7 +46,7 @@ A demo will be available at http://martd.amitu.com
 
 
 
-Client API
+## Client API
 
 
 handle = martd.sub("channel", function(){ /*subscribed*/ }, etag /*optional*/);
@@ -84,7 +64,7 @@ martd.client_id is a uniq id generated on each page load.
 
 
 
-Channels
+## Channels
 
 
 Clients subscribe to "channels". Each client can connect to one or more 
@@ -113,7 +93,7 @@ anytime, whenever there is no data left in channel and no client is connected.
 
 
 
-Push
+## Push
 
 
 Push can be sent from "server side". An empty push can be sent to set channel
@@ -128,7 +108,7 @@ of seen status of a message.
 
 
 
-Proxy Pass
+## Proxy Pass
 
 
 For production, this server should be configured behind nginx, on the same 
@@ -141,8 +121,8 @@ For development, it comes packaged with a SSL certificate. If proxy pass feature
 is being used with prod, you can pass your own SSL certificate.
 
 
-References:
+## References
 
-https://github.com/wandenberg/nginx-push-stream-module/tree/master/docs/examples
-https://groups.google.com/forum/#!topic/golang-nuts/rY4KoouaQu4
-https://gist.github.com/nono/1048668
+- https://github.com/wandenberg/nginx-push-stream-module/tree/master/docs/examples
+- https://groups.google.com/forum/#!topic/golang-nuts/rY4KoouaQu4
+- https://gist.github.com/nono/1048668
