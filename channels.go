@@ -9,7 +9,7 @@ import (
 
 type Message struct {
 	Data    []byte
-	Created time.Time // created time acts as the etag
+	Created int64 // created time acts as the etag
 }
 
 type Channel struct {
@@ -44,10 +44,10 @@ func GetOrCreateChannel(
 	if !ch.inited {
 		ch.inited = true
 		ch.Size = size
-		ch.Messages = NewCircularMessageArray(size)
 		ch.Life = life
 		ch.One2One = one2one
 		ch.Key = key
+		ch.Messages = NewCircularMessageArray(size)
 	}
 
 	j, _ := json.MarshalIndent(Channels, " ", "    ")
@@ -67,16 +67,16 @@ func GetChannel_(name string) *Channel {
 		ch = &Channel{Name: name, Clients: make(map[string]chan *Message)}
 		Channels[name] = ch
 
-		// Spaws a goroutine to delete this channel?
+		// TODO spawn a goroutine to delete this channel?
 	}
 	return ch
 }
 
-func (c *Channel) Publish(data []byte) error {
+func (c *Channel) Pub(data []byte) error {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
-	m := &Message{Data: data, Created: time.Now()}
+	m := &Message{Data: data, Created: time.Now().UnixNano()}
 	c.Messages.Push(m)
 
 	for _, client := range c.Clients {
@@ -89,7 +89,7 @@ func (c *Channel) Publish(data []byte) error {
 	return nil
 }
 
-func (c *Channel) Subscribe(cid string) chan *Message {
+func (c *Channel) Sub(cid string, etag int64) (chan *Message, *Message) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
@@ -97,12 +97,28 @@ func (c *Channel) Subscribe(cid string) chan *Message {
 	if ok {
 		existing <- nil
 	}
+
+	if c.Messages != nil {
+		ml := c.Messages.Length()
+
+		if etag != 0 && ml != 0 {
+			// find the first message in the channel with etag greater than this.
+			for i := uint(0); i < ml-1; i++ {
+				ith, _ := c.Messages.Ith(i)
+				if etag == ith.Created {
+					next, _ := c.Messages.Ith(i + 1)
+					return nil, next
+				}
+			}
+		}
+	}
+
 	ch := make(chan *Message)
 	c.Clients[cid] = ch
-	return ch
+	return ch, nil
 }
 
-func (c *Channel) UnSubscribe(cid string) {
+func (c *Channel) UnSub(cid string) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 

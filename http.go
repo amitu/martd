@@ -59,7 +59,7 @@ func PubHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(body) != 0 {
-		err := ch.Publish(body)
+		err := ch.Pub(body)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 		}
@@ -86,6 +86,19 @@ func SubHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	etag_s := r.FormValue("etag")
+	if etag_s == "" {
+		etag_s = r.Header.Get("If-None-Match")
+	}
+
+	etag := int64(0)
+	if etag_s != "" {
+		_, err := fmt.Sscan(etag_s, &etag)
+		if err != nil {
+			http.Error(w, "invalid etag: "+err.Error(), http.StatusBadRequest)
+		}
+	}
+
 	cner, ok := w.(http.CloseNotifier)
 	if !ok {
 		http.Error(w, "channel is required", http.StatusBadRequest)
@@ -93,7 +106,13 @@ func SubHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ch := GetChannel(channel)
-	sub := ch.Subscribe(cid)
+	sub, m := ch.Sub(cid, etag)
+
+	if m != nil {
+		w.Header().Add("Etag", fmt.Sprintf("%d", m.Created))
+		w.Write(m.Data)
+		return
+	}
 
 	select {
 	case m := <-sub:
@@ -101,14 +120,12 @@ func SubHandler(w http.ResponseWriter, r *http.Request) {
 			// new guy came with same client id, kill this connection
 			fmt.Fprintf(w, "oops, new client")
 		} else {
+			w.Header().Add("Etag", fmt.Sprintf("%d", m.Created))
 			w.Write(m.Data)
 		}
 	case <-cner.CloseNotify():
-		fmt.Println("closed")
-		ch.UnSubscribe(cid)
+		ch.UnSub(cid)
 	}
-
-	// TODO: etag handling
 }
 
 func OKHandler(w http.ResponseWriter, r *http.Request) {
