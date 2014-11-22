@@ -13,10 +13,12 @@ import (
 
 var (
 	HostPort string
+	Debug    bool
 )
 
 func init() {
 	flag.StringVar(&HostPort, "http", ":5432", "HTTP Host:Port")
+	flag.BoolVar(&Debug, "debug", false, "Debug.")
 }
 
 func PubHandler(w http.ResponseWriter, r *http.Request) {
@@ -141,12 +143,15 @@ func OKHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func ServeHTTP() {
+	if Debug {
+		http.Handle("/static/", http.FileServer(http.Dir(".")))
+	} else {
+		http.Handle("/static/", http.FileServer(FS(false)))
+	}
 	http.HandleFunc("/", OKHandler)
 	http.HandleFunc("/pub", PubHandler)
 	http.HandleFunc("/sub", SubHandler)
 	http.HandleFunc("/stats", OKHandler)
-	http.HandleFunc("/client.js", OKHandler)
-	http.HandleFunc("/iframe.html", OKHandler)
 
 	log.Printf("Started HTTP Server on %s.", HostPort)
 	logger := gutils.NewApacheLoggingHandler(http.DefaultServeMux, os.Stderr)
