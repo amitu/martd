@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"github.com/amitu/gutils"
@@ -21,10 +22,31 @@ func init() {
 	flag.BoolVar(&Debug, "debug", false, "Debug.")
 }
 
+func reject(w http.ResponseWriter, reason string) {
+	j, err := json.Marshal(map[string]string{"error": reason})
+	if err != nil {
+		log.Println("Error during json.Marshal", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	http.Error(w, string(j), http.StatusBadRequest)
+}
+
+func respond(w http.ResponseWriter, m *Message) {
+	w.Header().Add("Etag", fmt.Sprintf("%d", m.Created))
+	j, err := json.Marshal(map[string]string{"payload": string(m.Data)})
+	if err != nil {
+		log.Println("Error during json.Marshal", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Write(j)
+}
+
 func PubHandler(w http.ResponseWriter, r *http.Request) {
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		reject(w, err.Error())
 		return
 	}
 
@@ -35,7 +57,7 @@ func PubHandler(w http.ResponseWriter, r *http.Request) {
 	key := r.FormValue("key")
 
 	if channel == "" {
-		http.Error(w, "channel is required", http.StatusBadRequest)
+		reject(w, "channel is required")
 		return
 	}
 
@@ -43,7 +65,8 @@ func PubHandler(w http.ResponseWriter, r *http.Request) {
 	if size_s != "" {
 		_, err := fmt.Sscan(size_s, &size)
 		if err != nil {
-			http.Error(w, "invalid size: "+err.Error(), http.StatusBadRequest)
+			reject(w, "invalid size: "+err.Error())
+			return
 		}
 	}
 
@@ -51,40 +74,44 @@ func PubHandler(w http.ResponseWriter, r *http.Request) {
 	if life_s != "" {
 		_, err := fmt.Sscan(life_s, &life)
 		if err != nil {
-			http.Error(w, "invalid life: "+err.Error(), http.StatusBadRequest)
+			reject(w, "invalid life: "+err.Error())
+			return
 		}
 	}
 
 	ch, err := GetOrCreateChannel(channel, size, life, one2one, key)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		reject(w, err.Error())
+		return
 	}
 
 	if len(body) != 0 {
 		err := ch.Pub(body)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			reject(w, err.Error())
+			return
 		}
 	}
 
 	j, err := ch.Json()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		reject(w, err.Error())
+		return
 	}
 
-	fmt.Fprintf(w, "%s\n", j)
+	fmt.Fprintf(w, "%s", j)
 }
 
 func SubHandler(w http.ResponseWriter, r *http.Request) {
 	channel := r.FormValue("channel")
 	if channel == "" {
-		http.Error(w, "channel is required", http.StatusBadRequest)
+		reject(w, "channel is required")
 		return
 	}
 
 	cid := r.FormValue("cid")
 	if cid == "" {
-		http.Error(w, "client id(cid) is required", http.StatusBadRequest)
+		reject(w, "client id(cid) is required")
 		return
 	}
 
@@ -105,13 +132,14 @@ func SubHandler(w http.ResponseWriter, r *http.Request) {
 	if etag_s != "" {
 		_, err := fmt.Sscan(etag_s, &etag)
 		if err != nil {
-			http.Error(w, "invalid etag: "+err.Error(), http.StatusBadRequest)
+			reject(w, "invalid etag: "+err.Error())
+			return
 		}
 	}
 
 	cner, ok := w.(http.CloseNotifier)
 	if !ok {
-		http.Error(w, "channel is required", http.StatusBadRequest)
+		reject(w, "channel is required")
 		return
 	}
 
@@ -119,8 +147,7 @@ func SubHandler(w http.ResponseWriter, r *http.Request) {
 	sub, m := ch.Sub(cid, etag)
 
 	if m != nil {
-		w.Header().Add("Etag", fmt.Sprintf("%d", m.Created))
-		w.Write(m.Data)
+		respond(w, m)
 		return
 	}
 
@@ -128,10 +155,9 @@ func SubHandler(w http.ResponseWriter, r *http.Request) {
 	case m := <-sub:
 		if m == nil {
 			// new guy came with same client id, kill this connection
-			fmt.Fprintf(w, "oops, new client")
+			reject(w, "oops, new client")
 		} else {
-			w.Header().Add("Etag", fmt.Sprintf("%d", m.Created))
-			w.Write(m.Data)
+			respond(w, m)
 		}
 	case <-cner.CloseNotify():
 		ch.UnSub(cid)
@@ -143,11 +169,11 @@ func OKHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func ServeHTTP() {
-	http.Handle("/static/", http.FileServer(FS(Debug)))
 	http.HandleFunc("/", OKHandler)
 	http.HandleFunc("/pub", PubHandler)
 	http.HandleFunc("/sub", SubHandler)
 	http.HandleFunc("/stats", OKHandler)
+	http.Handle("/static/", http.FileServer(FS(Debug)))
 
 	log.Printf("Started HTTP Server on %s.", HostPort)
 	logger := gutils.NewApacheLoggingHandler(http.DefaultServeMux, os.Stderr)
