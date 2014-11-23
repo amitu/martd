@@ -143,11 +143,7 @@ func OKHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func ServeHTTP() {
-	if Debug {
-		http.Handle("/static/", http.FileServer(http.Dir(".")))
-	} else {
-		http.Handle("/static/", http.FileServer(FS(false)))
-	}
+	http.Handle("/static/", http.FileServer(FS(Debug)))
 	http.HandleFunc("/", OKHandler)
 	http.HandleFunc("/pub", PubHandler)
 	http.HandleFunc("/sub", SubHandler)

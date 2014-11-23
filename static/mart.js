@@ -44,6 +44,7 @@ window.mart = function() {
 	var bump = function() {
 		ajax("/sub?channel=ch1&cid=" + mart.cid + "&b=" + guid(), false, function (text, req) {
 			$("body").append("<pre>" + text + "<pre><hr>");
+			// read header: alert(req.getAllResponseHeaders("ETag"));
 			// TODO: backoff on errors
 			window.setTimeout(bump, 0);
 		});
