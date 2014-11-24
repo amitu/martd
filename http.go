@@ -18,7 +18,7 @@ var (
 )
 
 func init() {
-	flag.StringVar(&HostPort, "http", ":5432", "HTTP Host:Port")
+	flag.StringVar(&HostPort, "http", ":54321", "HTTP Host:Port")
 	flag.BoolVar(&Debug, "debug", false, "Debug.")
 }
 
@@ -33,8 +33,11 @@ func reject(w http.ResponseWriter, reason string) {
 }
 
 func respond(w http.ResponseWriter, m *Message) {
-	w.Header().Add("Etag", fmt.Sprintf("%d", m.Created))
-	j, err := json.Marshal(map[string]string{"payload": string(m.Data)})
+	etag := fmt.Sprintf("%d", m.Created)
+	w.Header().Add("Etag", etag)
+	j, err := json.Marshal(
+		map[string]string{"payload": string(m.Data), "etag": etag},
+	)
 	if err != nil {
 		log.Println("Error during json.Marshal", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
