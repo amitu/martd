@@ -89,7 +89,12 @@ func (c *Channel) Pub(data []byte) error {
 	return nil
 }
 
-func (c *Channel) Sub(cid string, etag int64) (chan *Message, *Message) {
+func (c *Channel) Sub(cid string, etag int64) (chan *Message, uint) {
+	/*
+		etag symantics: if someone has passed etag != 0, means they have some
+		old data, and want everything since then. we may have lost some data
+		by then, but we should not lose anything more.
+	*/
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
@@ -98,24 +103,26 @@ func (c *Channel) Sub(cid string, etag int64) (chan *Message, *Message) {
 		existing <- nil
 	}
 
-	if c.Messages != nil {
+	if etag != 0 && c.Messages != nil && c.Messages.Length() > 0 {
+		oldest, _ := c.Messages.PeekOldest() // TODO, handle error?
+		if oldest.Created > etag {
+			return nil, 0 // oldest
+		}
+
 		ml := c.Messages.Length()
 
-		if etag != 0 && ml != 0 {
-			// find the first message in the channel with etag == this.
-			for i := uint(0); i < ml-1; i++ {
-				ith, _ := c.Messages.Ith(i)
-				if etag == ith.Created {
-					next, _ := c.Messages.Ith(i + 1)
-					return nil, next
-				}
+		// find the first message in the channel with .Created == etag.
+		for i := uint(0); i < ml-1; i++ {
+			ith, _ := c.Messages.Ith(i)
+			if etag == ith.Created {
+				return nil, i + 1
 			}
 		}
 	}
 
 	ch := make(chan *Message)
 	c.Clients[cid] = ch
-	return ch, nil
+	return ch, 0
 }
 
 func (c *Channel) UnSub(cid string) {
@@ -126,5 +133,8 @@ func (c *Channel) UnSub(cid string) {
 }
 
 func (c *Channel) Json() ([]byte, error) {
-	return json.MarshalIndent(c, " ", "    ")
+	m, _ := c.Messages.PeekNewest() // TODO handle error
+	return json.MarshalIndent(
+		map[string]int64{"etag": m.Created}, " ", "    ",
+	)
 }

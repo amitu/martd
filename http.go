@@ -12,6 +12,18 @@ import (
 	"time"
 )
 
+// type ChanResponse struct {
+// 	Etag    int64    `json:"etag"`
+// 	Payload []string `json:"payload"`
+// }
+
+type SubResponse struct {
+	// Channels map[string]Channel `json:"channels"`
+	Etag    int64    `json:"etag"`
+	Payload []string `json:"payload"`
+	Error   string   `json:"error"`
+}
+
 var (
 	HostPort string
 	Debug    bool
@@ -23,7 +35,7 @@ func init() {
 }
 
 func reject(w http.ResponseWriter, reason string) {
-	j, err := json.Marshal(map[string]string{"error": reason})
+	j, err := json.Marshal(SubResponse{Error: reason})
 	if err != nil {
 		log.Println("Error during json.Marshal", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -35,9 +47,25 @@ func reject(w http.ResponseWriter, reason string) {
 func respond(w http.ResponseWriter, m *Message) {
 	etag := fmt.Sprintf("%d", m.Created)
 	w.Header().Add("Etag", etag)
-	j, err := json.Marshal(
-		map[string]string{"payload": string(m.Data), "etag": etag},
-	)
+	j, err := json.Marshal(SubResponse{m.Created, []string{string(m.Data)}, ""})
+	if err != nil {
+		log.Println("Error during json.Marshal", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Write(j)
+}
+
+func respondMany(w http.ResponseWriter, ch *Channel, ith uint) {
+	payload := []string{}
+	etag := int64(0)
+	ml := ch.Messages.Length()
+	for i := ith; i < ml; i++ {
+		ithm, _ := ch.Messages.Ith(i)
+		payload = append(payload, string(ithm.Data))
+		etag = ithm.Created
+	}
+	j, err := json.Marshal(SubResponse{etag, payload, ""})
 	if err != nil {
 		log.Println("Error during json.Marshal", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -147,10 +175,10 @@ func SubHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ch := GetChannel(channel)
-	sub, m := ch.Sub(cid, etag)
+	sub, ith := ch.Sub(cid, etag)
 
-	if m != nil {
-		respond(w, m)
+	if sub == nil {
+		respondMany(w, ch, ith)
 		return
 	}
 
