@@ -200,11 +200,11 @@ func OKHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func ServeHTTP() {
-	http.HandleFunc("/", OKHandler)
+	// http.HandleFunc("/", OKHandler)
 	http.HandleFunc("/pub", PubHandler)
 	http.HandleFunc("/sub", SubHandler)
 	http.HandleFunc("/stats", OKHandler)
-	http.Handle("/static/", http.FileServer(FS(Debug)))
+	http.Handle("/", http.FileServer(FS(Debug)))
 
 	log.Printf("Started HTTP Server on %s.", HostPort)
 	logger := gutils.NewApacheLoggingHandler(http.DefaultServeMux, os.Stderr)
