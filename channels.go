@@ -13,14 +13,14 @@ type Message struct {
 }
 
 type Channel struct {
-	Name     string                       `json:"name"`
-	Size     uint                         `json:"size"`
-	Life     time.Duration                `json:"life"`
-	Key      string                       `json:"key,omitempty"`
-	Clients  map[string]chan ChannelEvent `json:"-"`
-	Messages *CircularMessageArray        `json:"-"`
-	One2One  bool                         `json:"one2one"`
-	lock     sync.RWMutex                 `json:"-"`
+	Name     string                      `json:"name"`
+	Size     uint                        `json:"size"`
+	Life     time.Duration               `json:"life"`
+	Key      string                      `json:"key,omitempty"`
+	Clients  map[chan *ChannelEvent]bool `json:"-"`
+	Messages *CircularMessageArray       `json:"-"`
+	One2One  bool                        `json:"one2one"`
+	lock     sync.RWMutex                `json:"-"`
 	inited   bool
 }
 
@@ -69,7 +69,7 @@ func GetChannel(name string) *Channel {
 func GetChannel_(name string) *Channel {
 	ch, ok := Channels[name]
 	if !ok {
-		ch = &Channel{Name: name, Clients: make(map[string]chan ChannelEvent)}
+		ch = &Channel{Name: name, Clients: make(map[chan *ChannelEvent]bool)}
 		Channels[name] = ch
 
 		// TODO spawn a goroutine to delete this channel?
@@ -84,11 +84,11 @@ func (c *Channel) Pub(data []byte) error {
 	m := &Message{Data: data, Created: time.Now().UnixNano()}
 	c.Messages.Push(m)
 
-	for _, evch := range c.Clients {
-		evch <- ChannelEvent{c, m}
+	for evch, _ := range c.Clients {
+		evch <- &ChannelEvent{c, m}
 	}
 
-	c.Clients = make(map[string]chan ChannelEvent)
+	c.Clients = make(map[chan *ChannelEvent]bool)
 
 	fmt.Println("After publish", *c.Messages)
 	return nil
@@ -122,18 +122,18 @@ func (c *Channel) HasNew(cid string, etag int64) (bool, uint) {
 	return false, 0
 }
 
-func (c *Channel) Sub(cid string, evch chan ChannelEvent) {
+func (c *Channel) Sub(evch chan *ChannelEvent) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
-	c.Clients[cid] = evch
+	c.Clients[evch] = true
 }
 
-func (c *Channel) UnSub(cid string) {
+func (c *Channel) UnSub(evch chan *ChannelEvent) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
-	delete(c.Clients, cid)
+	delete(c.Clients, evch)
 }
 
 func (c *Channel) Json() ([]byte, error) {

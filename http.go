@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"sync"
 	"time"
 )
 
@@ -23,13 +24,16 @@ type SubResponse struct {
 }
 
 var (
-	HostPort string
-	Debug    bool
+	HostPort  string
+	Debug     bool
+	CIDM      map[string]chan *ChannelEvent
+	CIDM_lock sync.RWMutex
 )
 
 func init() {
 	flag.StringVar(&HostPort, "http", ":54321", "HTTP Host:Port")
 	flag.BoolVar(&Debug, "debug", false, "Debug.")
+	CIDM = make(map[string]chan *ChannelEvent)
 }
 
 func reject(w http.ResponseWriter, reason string) {
@@ -126,7 +130,15 @@ func SubHandler(w http.ResponseWriter, r *http.Request) {
 	// stream, eg get 1 and 3 but not 2 (unless of course 2 has expired by the
 	// time 2nd request comes (which we cant help, increase life))
 
-	evch := make(chan ChannelEvent)
+	CIDM_lock.Lock()
+	oldch, ok := CIDM[cid]
+	if ok {
+		oldch <- nil
+	}
+	evch := make(chan *ChannelEvent)
+	CIDM[cid] = evch
+	CIDM_lock.Unlock()
+
 	subs := make([]*Channel, 0)
 	resp := &SubResponse{make(map[string]*ChanResponse), ""}
 
@@ -141,7 +153,6 @@ func SubHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		etag := int64(0)
-		fmt.Println(k, v)
 		_, err := fmt.Sscan(v, &etag)
 		if err != nil {
 			reject(w, "invalid etag: "+err.Error())
@@ -164,7 +175,8 @@ func SubHandler(w http.ResponseWriter, r *http.Request) {
 
 	// sub everything
 	for _, ch := range subs {
-		ch.Sub(cid, evch)
+		fmt.Printf("cid=%s subscribed to %s\n", cid, ch.Name)
+		ch.Sub(evch)
 	}
 
 	cner, ok := w.(http.CloseNotifier)
@@ -175,14 +187,18 @@ func SubHandler(w http.ResponseWriter, r *http.Request) {
 
 	select {
 	case cm := <-evch:
-		resp.Channels[cm.Chan.Name] = &ChanResponse{
-			cm.Mesg.Created, []string{string(cm.Mesg.Data)},
+		if cm == nil {
+			reject(w, "another instance joined")
+		} else {
+			resp.Channels[cm.Chan.Name] = &ChanResponse{
+				cm.Mesg.Created, []string{string(cm.Mesg.Data)},
+			}
+			respond(w, resp)
 		}
-		respond(w, resp)
 	case <-cner.CloseNotify():
 	}
 	for _, ch := range subs {
-		ch.UnSub(cid)
+		ch.UnSub(evch)
 	}
 }
 
