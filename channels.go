@@ -147,8 +147,8 @@ func (c *Channel) Json() ([]byte, error) {
 }
 
 func (ch *Channel) Append(resp *SubResponse, ith uint) {
-	c.lock.Lock()
-	defer c.lock.Unlock()
+	ch.lock.Lock()
+	defer ch.lock.Unlock()
 
 	payload := []string{}
 	etag := int64(0)

@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/amitu/gutils"
+	"github.com/dustin/go-humanize"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -20,20 +21,22 @@ type ChanResponse struct {
 
 type SubResponse struct {
 	Channels map[string]*ChanResponse `json:"channels,omitempty"`
-	Error    string                   `json:"error"`
+	Error    string                   `json:"error,omitempty"`
 }
 
 var (
-	HostPort  string
-	Debug     bool
-	CIDM      map[string]chan *ChannelEvent
-	CIDM_lock sync.RWMutex
+	HostPort    string
+	Debug       bool
+	CIDM        map[string]chan *ChannelEvent
+	CIDM_lock   sync.RWMutex
+	ServerStart time.Time
 )
 
 func init() {
 	flag.StringVar(&HostPort, "http", ":54321", "HTTP Host:Port")
 	flag.BoolVar(&Debug, "debug", false, "Debug.")
 	CIDM = make(map[string]chan *ChannelEvent)
+	ServerStart = time.Now()
 }
 
 func reject(w http.ResponseWriter, reason string) {
@@ -115,6 +118,12 @@ func PubHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "%s", j)
 }
 
+func DeleteCID(cid string) {
+	CIDM_lock.Lock()
+	delete(CIDM, cid)
+	CIDM_lock.Unlock()
+}
+
 func SubHandler(w http.ResponseWriter, r *http.Request) {
 	cid := r.FormValue("cid")
 	if cid == "" {
@@ -138,6 +147,8 @@ func SubHandler(w http.ResponseWriter, r *http.Request) {
 	evch := make(chan *ChannelEvent)
 	CIDM[cid] = evch
 	CIDM_lock.Unlock()
+
+	defer DeleteCID(cid)
 
 	subs := make([]*Channel, 0)
 	resp := &SubResponse{make(map[string]*ChanResponse), ""}
@@ -175,7 +186,6 @@ func SubHandler(w http.ResponseWriter, r *http.Request) {
 
 	// sub everything
 	for _, ch := range subs {
-		fmt.Printf("cid=%s subscribed to %s\n", cid, ch.Name)
 		ch.Sub(evch)
 	}
 
@@ -200,20 +210,32 @@ func SubHandler(w http.ResponseWriter, r *http.Request) {
 	for _, ch := range subs {
 		ch.UnSub(evch)
 	}
-	CIDM_lock.Lock()
-	delete(CIDM, cid)
-	CIDM_lock.Unlock()
 }
 
-func OKHandler(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, "ok")
+func StatsHandler(w http.ResponseWriter, r *http.Request) {
+	CIDM_lock.Lock()
+	defer CIDM_lock.Unlock()
+
+	ChannelLock.Lock()
+	defer ChannelLock.Unlock()
+
+	fmt.Fprintf(
+		w, `Started: %s (%s)
+Channels: %d
+Clients: %d
+`,
+		ServerStart,
+		humanize.Time(ServerStart),
+		len(Channels),
+		len(CIDM),
+	)
 }
 
 func ServeHTTP() {
 	// http.HandleFunc("/", OKHandler)
 	http.HandleFunc("/pub", PubHandler)
 	http.HandleFunc("/sub", SubHandler)
-	http.HandleFunc("/stats", OKHandler)
+	http.HandleFunc("/stats", StatsHandler)
 	http.Handle("/", http.FileServer(FS(Debug)))
 
 	log.Printf("Started HTTP Server on %s.", HostPort)
