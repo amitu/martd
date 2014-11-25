@@ -12,16 +12,14 @@ import (
 	"time"
 )
 
-// type ChanResponse struct {
-// 	Etag    int64    `json:"etag"`
-// 	Payload []string `json:"payload"`
-// }
-
-type SubResponse struct {
-	// Channels map[string]Channel `json:"channels"`
+type ChanResponse struct {
 	Etag    int64    `json:"etag"`
 	Payload []string `json:"payload"`
-	Error   string   `json:"error"`
+}
+
+type SubResponse struct {
+	Channels map[string]*ChanResponse `json:"channels,omitempty"`
+	Error    string                   `json:"error"`
 }
 
 var (
@@ -44,28 +42,8 @@ func reject(w http.ResponseWriter, reason string) {
 	http.Error(w, string(j), http.StatusBadRequest)
 }
 
-func respond(w http.ResponseWriter, m *Message) {
-	etag := fmt.Sprintf("%d", m.Created)
-	w.Header().Add("Etag", etag)
-	j, err := json.Marshal(SubResponse{m.Created, []string{string(m.Data)}, ""})
-	if err != nil {
-		log.Println("Error during json.Marshal", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	w.Write(j)
-}
-
-func respondMany(w http.ResponseWriter, ch *Channel, ith uint) {
-	payload := []string{}
-	etag := int64(0)
-	ml := ch.Messages.Length()
-	for i := ith; i < ml; i++ {
-		ithm, _ := ch.Messages.Ith(i)
-		payload = append(payload, string(ithm.Data))
-		etag = ithm.Created
-	}
-	j, err := json.Marshal(SubResponse{etag, payload, ""})
+func respond(w http.ResponseWriter, resp *SubResponse) {
+	j, err := json.Marshal(resp)
 	if err != nil {
 		log.Println("Error during json.Marshal", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -134,21 +112,10 @@ func PubHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func SubHandler(w http.ResponseWriter, r *http.Request) {
-	channel := r.FormValue("channel")
-	if channel == "" {
-		reject(w, "channel is required")
-		return
-	}
-
 	cid := r.FormValue("cid")
 	if cid == "" {
 		reject(w, "client id(cid) is required")
 		return
-	}
-
-	etag_s := r.FormValue("etag")
-	if etag_s == "" {
-		etag_s = r.Header.Get("If-None-Match")
 	}
 
 	// TODO: whats the symantics for etag=0? the whole point of keeping old
@@ -159,13 +126,45 @@ func SubHandler(w http.ResponseWriter, r *http.Request) {
 	// stream, eg get 1 and 3 but not 2 (unless of course 2 has expired by the
 	// time 2nd request comes (which we cant help, increase life))
 
-	etag := int64(0)
-	if etag_s != "" {
-		_, err := fmt.Sscan(etag_s, &etag)
+	evch := make(chan ChannelEvent)
+	subs := make([]*Channel, 0)
+	resp := &SubResponse{make(map[string]*ChanResponse), ""}
+
+	for k, _ := range r.Form {
+		if k == "cid" {
+			continue
+		}
+		v := r.FormValue(k)
+		if v == "" {
+			reject(w, k+" has no etag")
+			return
+		}
+
+		etag := int64(0)
+		fmt.Println(k, v)
+		_, err := fmt.Sscan(v, &etag)
 		if err != nil {
 			reject(w, "invalid etag: "+err.Error())
 			return
 		}
+
+		ch := GetChannel(k)
+		has, ith := ch.HasNew(cid, etag)
+		if has {
+			ch.Append(resp, ith)
+		} else {
+			subs = append(subs, ch)
+		}
+	}
+
+	if len(resp.Channels) != 0 {
+		respond(w, resp)
+		return
+	}
+
+	// sub everything
+	for _, ch := range subs {
+		ch.Sub(cid, evch)
 	}
 
 	cner, ok := w.(http.CloseNotifier)
@@ -174,23 +173,20 @@ func SubHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ch := GetChannel(channel)
-	sub, ith := ch.Sub(cid, etag)
-
-	if sub == nil {
-		respondMany(w, ch, ith)
-		return
-	}
-
 	select {
-	case m := <-sub:
-		if m == nil {
+	case cm := <-evch:
+		if cm.Mesg == nil {
 			// new guy came with same client id, kill this connection
 			reject(w, "oops, new client")
 		} else {
-			respond(w, m)
+			resp.Channels[cm.Chan.Name] = &ChanResponse{
+				cm.Mesg.Created, []string{string(cm.Mesg.Data)},
+			}
+			respond(w, resp)
 		}
 	case <-cner.CloseNotify():
+	}
+	for _, ch := range subs {
 		ch.UnSub(cid)
 	}
 }
