@@ -200,6 +200,9 @@ func SubHandler(w http.ResponseWriter, r *http.Request) {
 	for _, ch := range subs {
 		ch.UnSub(evch)
 	}
+	CIDM_lock.Lock()
+	delete(CIDM, cid)
+	CIDM_lock.Unlock()
 }
 
 func OKHandler(w http.ResponseWriter, r *http.Request) {

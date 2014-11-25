@@ -137,6 +137,9 @@ func (c *Channel) UnSub(evch chan *ChannelEvent) {
 }
 
 func (c *Channel) Json() ([]byte, error) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
 	m, _ := c.Messages.PeekNewest() // TODO handle error
 	return json.MarshalIndent(
 		map[string]int64{"etag": m.Created}, " ", "    ",
@@ -144,6 +147,9 @@ func (c *Channel) Json() ([]byte, error) {
 }
 
 func (ch *Channel) Append(resp *SubResponse, ith uint) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
 	payload := []string{}
 	etag := int64(0)
 	ml := ch.Messages.Length()
