@@ -126,11 +126,6 @@ func (c *Channel) Sub(cid string, evch chan ChannelEvent) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
-	oevch, ok := c.Clients[cid]
-	if ok {
-		oevch <- ChannelEvent{c, nil}
-	}
-
 	c.Clients[cid] = evch
 }
 

@@ -169,21 +169,16 @@ func SubHandler(w http.ResponseWriter, r *http.Request) {
 
 	cner, ok := w.(http.CloseNotifier)
 	if !ok {
-		reject(w, "channel is required")
+		reject(w, "server issue, handler does not support CloseNotifier")
 		return
 	}
 
 	select {
 	case cm := <-evch:
-		if cm.Mesg == nil {
-			// new guy came with same client id, kill this connection
-			reject(w, "oops, new client")
-		} else {
-			resp.Channels[cm.Chan.Name] = &ChanResponse{
-				cm.Mesg.Created, []string{string(cm.Mesg.Data)},
-			}
-			respond(w, resp)
+		resp.Channels[cm.Chan.Name] = &ChanResponse{
+			cm.Mesg.Created, []string{string(cm.Mesg.Data)},
 		}
+		respond(w, resp)
 	case <-cner.CloseNotify():
 	}
 	for _, ch := range subs {
