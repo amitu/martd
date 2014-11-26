@@ -99,7 +99,7 @@ func (c *Channel) HasNew(etag int64) (bool, uint) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
-	if etag != 0 && c.Messages != nil && c.Messages.Length() > 0 {
+	if c.Messages != nil && c.Messages.Length() > 0 {
 		oldest, _ := c.Messages.PeekOldest() // TODO, handle error?
 		if oldest.Created > etag {
 			return true, 0 // oldest
