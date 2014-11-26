@@ -10,6 +10,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"runtime"
 	"sync"
 	"time"
 )
@@ -201,11 +202,13 @@ func StatsHandler(w http.ResponseWriter, r *http.Request) {
 		w, `Started: %s (%s)
 Channels: %d
 Clients: %d
+NumGoroutine: %d
 `,
 		ServerStart,
 		humanize.Time(ServerStart),
 		len(Channels),
 		nSub,
+		runtime.NumGoroutine(),
 	)
 }
 
@@ -217,9 +220,10 @@ func ServeHTTP() {
 
 	log.Printf("Started HTTP Server on %s.", HostPort)
 	logger := gutils.NewApacheLoggingHandler(http.DefaultServeMux, os.Stderr)
+	fmt.Println(logger)
 	server := &http.Server{
 		Addr:    HostPort,
-		Handler: logger,
+		Handler: http.DefaultServeMux, // logger,
 	}
 	log.Fatal(server.ListenAndServe())
 }

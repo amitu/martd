@@ -15,7 +15,7 @@ import (
 )
 
 var (
-	URL = "http://localhost:54321/sub?ch="
+	URL = "http://127.0.0.1:54321/sub?ch="
 )
 
 func doOnce(ok, nok, oops chan bool, etag *string) {
@@ -45,8 +45,11 @@ func main() {
 	oops := make(chan bool)
 
 	for i := 0; i < *N; i++ {
+		fmt.Printf("N1 = %d\r", i)
+		<-time.After(time.Microsecond * 200)
 		go doOnce(ok, nok, oops, etag)
 	}
+	fmt.Println("")
 
 	fmt.Println("go routines started", *N, URL+*etag, humanize.Time(start))
 
@@ -55,6 +58,7 @@ func main() {
 	n_oops := 0
 
 	for i := 0; i < *N; i++ {
+		fmt.Printf("N2 = %d\r", i)
 		select {
 		case <-ok:
 			n_ok += 1
@@ -64,6 +68,7 @@ func main() {
 			n_oops += 1
 		}
 	}
+	fmt.Println("")
 
 	fmt.Println("n_ok", n_ok)
 	fmt.Println("n_nok", n_nok)
@@ -75,6 +80,7 @@ func main() {
 	resp, err := http.Get("http://localhost:54321/stats")
 	if err != nil {
 		fmt.Println("cant get status")
+		return
 	}
 	defer resp.Body.Close()
 	body, err := ioutil.ReadAll(resp.Body)
