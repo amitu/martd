@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"sync"
 	"time"
 )
@@ -55,8 +54,6 @@ func GetOrCreateChannel(
 		ch.Messages = NewCircularMessageArray(size)
 	}
 
-	j, _ := json.MarshalIndent(Channels, " ", "    ")
-	fmt.Println("After New", string(j))
 	return ch, nil
 }
 
@@ -90,11 +87,10 @@ func (c *Channel) Pub(data []byte) error {
 
 	c.Clients = make(map[chan *ChannelEvent]bool)
 
-	fmt.Println("After publish", *c.Messages)
 	return nil
 }
 
-func (c *Channel) HasNew(cid string, etag int64) (bool, uint) {
+func (c *Channel) HasNew(etag int64) (bool, uint) {
 	/*
 		etag symantics: if someone has passed etag != 0, means they have some
 		old data, and want everything since then. we may have lost some data

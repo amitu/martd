@@ -27,15 +27,14 @@ type SubResponse struct {
 var (
 	HostPort    string
 	Debug       bool
-	CIDM        map[string]chan *ChannelEvent
-	CIDM_lock   sync.RWMutex
 	ServerStart time.Time
+	nSub        int
+	CIDM_lock   sync.RWMutex
 )
 
 func init() {
 	flag.StringVar(&HostPort, "http", ":54321", "HTTP Host:Port")
 	flag.BoolVar(&Debug, "debug", false, "Debug.")
-	CIDM = make(map[string]chan *ChannelEvent)
 	ServerStart = time.Now()
 }
 
@@ -118,37 +117,19 @@ func PubHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "%s", j)
 }
 
-func DeleteCID(cid string) {
+func IncrCCount(by int) {
 	CIDM_lock.Lock()
-	delete(CIDM, cid)
-	CIDM_lock.Unlock()
+	defer CIDM_lock.Unlock()
+
+	nSub += by
 }
 
 func SubHandler(w http.ResponseWriter, r *http.Request) {
-	cid := r.FormValue("cid")
-	if cid == "" {
-		reject(w, "client id(cid) is required")
-		return
-	}
+	IncrCCount(1)
+	defer IncrCCount(-1)
 
-	// TODO: whats the symantics for etag=0? the whole point of keeping old
-	// messages is to send them to clients[1]. if we do that then there can be
-	// duplicates. but if we dont do that then there can be data loss.
-	//
-	// one can argue that [1] is not correct and point is to not lose data mid
-	// stream, eg get 1 and 3 but not 2 (unless of course 2 has expired by the
-	// time 2nd request comes (which we cant help, increase life))
-
-	CIDM_lock.Lock()
-	oldch, ok := CIDM[cid]
-	if ok {
-		oldch <- nil
-	}
+	r.ParseForm()
 	evch := make(chan *ChannelEvent)
-	CIDM[cid] = evch
-	CIDM_lock.Unlock()
-
-	defer DeleteCID(cid)
 
 	subs := make([]*Channel, 0)
 	resp := &SubResponse{make(map[string]*ChanResponse), ""}
@@ -171,7 +152,7 @@ func SubHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		ch := GetChannel(k)
-		has, ith := ch.HasNew(cid, etag)
+		has, ith := ch.HasNew(etag)
 		if has {
 			ch.Append(resp, ith)
 		} else {
@@ -197,16 +178,13 @@ func SubHandler(w http.ResponseWriter, r *http.Request) {
 
 	select {
 	case cm := <-evch:
-		if cm == nil {
-			reject(w, "another instance joined")
-		} else {
-			resp.Channels[cm.Chan.Name] = &ChanResponse{
-				cm.Mesg.Created, []string{string(cm.Mesg.Data)},
-			}
-			respond(w, resp)
+		resp.Channels[cm.Chan.Name] = &ChanResponse{
+			cm.Mesg.Created, []string{string(cm.Mesg.Data)},
 		}
+		respond(w, resp)
 	case <-cner.CloseNotify():
 	}
+
 	for _, ch := range subs {
 		ch.UnSub(evch)
 	}
@@ -227,12 +205,11 @@ Clients: %d
 		ServerStart,
 		humanize.Time(ServerStart),
 		len(Channels),
-		len(CIDM),
+		nSub,
 	)
 }
 
 func ServeHTTP() {
-	// http.HandleFunc("/", OKHandler)
 	http.HandleFunc("/pub", PubHandler)
 	http.HandleFunc("/sub", SubHandler)
 	http.HandleFunc("/stats", StatsHandler)
