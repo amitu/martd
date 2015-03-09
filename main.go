@@ -7,7 +7,8 @@ import (
 	"time"
 )
 
-// esc -o static.go static/
+//go:generate esc -o static.go index.html client.js
+//esc: http://godoc.org/github.com/mjibson/esc
 
 func DebugRoutine() {
 	for {

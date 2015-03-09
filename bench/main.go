@@ -8,10 +8,11 @@ $ ulimit -n 100000
 import (
 	"flag"
 	"fmt"
-	"github.com/dustin/go-humanize"
 	"io/ioutil"
 	"net/http"
 	"time"
+
+	"github.com/dustin/go-humanize"
 )
 
 var (

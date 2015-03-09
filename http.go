@@ -2,17 +2,17 @@ package main
 
 import (
 	"encoding/json"
+	"expvar"
 	"flag"
 	"fmt"
-	"github.com/amitu/gutils"
-	"github.com/dustin/go-humanize"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
-	"runtime"
 	"sync"
 	"time"
+
+	"github.com/amitu/gutils"
 )
 
 type ChanResponse struct {
@@ -29,8 +29,10 @@ var (
 	HostPort    string
 	Debug       bool
 	ServerStart time.Time
-	nSub        int
 	CIDM_lock   sync.RWMutex
+	nSub        = expvar.NewInt("nSub")
+	nSubAll     = expvar.NewInt("nSubAll")
+	nPubAll     = expvar.NewInt("nPubAll")
 )
 
 func init() {
@@ -60,6 +62,8 @@ func respond(w http.ResponseWriter, resp *SubResponse) {
 }
 
 func PubHandler(w http.ResponseWriter, r *http.Request) {
+	nPubAll.Add(1)
+
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		reject(w, err.Error())
@@ -118,16 +122,10 @@ func PubHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "%s", j)
 }
 
-func IncrCCount(by int) {
-	CIDM_lock.Lock()
-	defer CIDM_lock.Unlock()
-
-	nSub += by
-}
-
 func SubHandler(w http.ResponseWriter, r *http.Request) {
-	IncrCCount(1)
-	defer IncrCCount(-1)
+	nSub.Add(1)
+	nSubAll.Add(1)
+	defer nSub.Add(-1)
 
 	r.ParseForm()
 	evch := make(chan *ChannelEvent)
@@ -191,39 +189,16 @@ func SubHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func StatsHandler(w http.ResponseWriter, r *http.Request) {
-	CIDM_lock.Lock()
-	defer CIDM_lock.Unlock()
-
-	ChannelLock.Lock()
-	defer ChannelLock.Unlock()
-
-	fmt.Fprintf(
-		w, `Started: %s (%s)
-Channels: %d
-Clients: %d
-NumGoroutine: %d
-`,
-		ServerStart,
-		humanize.Time(ServerStart),
-		len(Channels),
-		nSub,
-		runtime.NumGoroutine(),
-	)
-}
-
 func ServeHTTP() {
 	http.HandleFunc("/pub", PubHandler)
 	http.HandleFunc("/sub", SubHandler)
-	http.HandleFunc("/stats", StatsHandler)
 	http.Handle("/", http.FileServer(FS(Debug)))
 
 	log.Printf("Started HTTP Server on %s.", HostPort)
 	logger := gutils.NewApacheLoggingHandler(http.DefaultServeMux, os.Stderr)
-	fmt.Println(logger)
 	server := &http.Server{
-		Addr:    HostPort,
-		Handler: http.DefaultServeMux, // logger,
+		Addr: HostPort,
+		Handler:/*http.DefaultServeMux,*/ logger,
 	}
 	log.Fatal(server.ListenAndServe())
 }
