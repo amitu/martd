@@ -78,7 +78,7 @@ func main() {
 	fmt.Println("time: ", humanize.Time(start))
 
 	fmt.Println("\nserver status:")
-	resp, err := http.Get("http://localhost:54321/stats")
+	resp, err := http.Get("http://localhost:54321/debug/vars")
 	if err != nil {
 		fmt.Println("cant get status")
 		return

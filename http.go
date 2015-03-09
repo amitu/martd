@@ -39,6 +39,8 @@ func init() {
 	flag.StringVar(&HostPort, "http", ":54321", "HTTP Host:Port")
 	flag.BoolVar(&Debug, "debug", false, "Debug.")
 	ServerStart = time.Now()
+
+	expvar.Publish("stats", expvar.Func(stats))
 }
 
 func reject(w http.ResponseWriter, reason string) {

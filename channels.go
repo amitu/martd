@@ -156,3 +156,12 @@ func (ch *Channel) Append(resp *SubResponse, ith uint) {
 	}
 	resp.Channels[ch.Name] = &ChanResponse{etag, payload}
 }
+
+func stats() interface{} {
+	ChannelLock.Lock()
+	defer ChannelLock.Unlock()
+
+	return map[string]interface{}{
+		"nChans": len(Channels),
+	}
+}
