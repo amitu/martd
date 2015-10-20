@@ -6,12 +6,11 @@
 		<script src="//ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js"></script>
 		<script src="client.js"></script>
 		<script>
-			mart.sub("c1", function(status){
-				console.log("subscribed to c1", status);
+			$("body").append("<pre>Waiting<pre><hr>");
+
+			var handle = martd.sub("c1", 0, function(data){
+				$("body").append("<pre>" + data + "<pre><hr>");
 			});
-			// mart.on("c1", function(data){
-			// 	console.log("data on c1", data)
-			// });
 		</script>
 	</body>
 </html>

@@ -16,7 +16,7 @@ import (
 )
 
 type ChanResponse struct {
-	Etag    int64    `json:"etag"`
+	Etag    string    `json:"etag"`
 	Payload []string `json:"payload"`
 }
 
@@ -180,7 +180,7 @@ func SubHandler(w http.ResponseWriter, r *http.Request) {
 	select {
 	case cm := <-evch:
 		resp.Channels[cm.Chan.Name] = &ChanResponse{
-			cm.Mesg.Created, []string{string(cm.Mesg.Data)},
+			fmt.Sprintf("%d", cm.Mesg.Created), []string{string(cm.Mesg.Data)},
 		}
 		respond(w, resp)
 	case <-cner.CloseNotify():

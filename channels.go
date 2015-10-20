@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"sync"
 	"time"
+	"fmt"
 )
 
 type Message struct {
@@ -139,10 +140,10 @@ func (c *Channel) Json() ([]byte, error) {
 	m, err := c.Messages.PeekNewest() // TODO handle error
 	if err == nil {
 		return json.MarshalIndent(
-			map[string]int64{"etag": m.Created}, " ", "    ",
+			map[string]string{"etag": fmt.Sprintf("%d", m.Created)}, " ", "    ",
 		)
 	} else {
-		return []byte("{\"etag\": 0}"), nil
+		return []byte("{\"etag\": \"0\"}"), nil
 	}
 }
 
@@ -158,7 +159,7 @@ func (ch *Channel) Append(resp *SubResponse, ith uint) {
 		payload = append(payload, string(ithm.Data))
 		etag = ithm.Created
 	}
-	resp.Channels[ch.Name] = &ChanResponse{etag, payload}
+	resp.Channels[ch.Name] = &ChanResponse{fmt.Sprintf("%d", etag), payload}
 }
 
 func stats() interface{} {

@@ -1,6 +1,6 @@
 // https://gist.github.com/Xeoncross/7663273
 
-window.mart = function() {
+window.martd = function() {
 	var ajax = function (url, data, callback, etag) {
 		var x = new(this.XMLHttpRequest || ActiveXObject)('MSXML2.XMLHTTP.3.0');
 		x.open(data ? 'POST' : 'GET', url, 1);
@@ -29,25 +29,56 @@ window.mart = function() {
 		};
 	})();
 
-	var mart = {};
-	var subs = {}
-	mart.cid = guid();
-	var etag = "";
+	var martd = {};
+	martd.request = null;
+	martd.channels = {};
+	martd.cid = guid();
 
-	mart.sub = function(chan, etag, cb) {
-		subs[chan] = cb;
-		$("body").append("<pre>Waiting<pre><hr>");
-		// console.log(mart, subs);
+	martd.sub = function(chan, etag, cb) {
+		var channel = martd.channels[chan]
+		if (!channel) {
+			channel = {
+				name: chan,
+				etag: etag,
+				callbacks: {}
+			}
+			martd.channels[chan] = channel;
+		}
+
+		var gid = guid();
+		channel.callbacks[gid] = cb;
 		bump();
+
+		return {
+			gid: gid,
+			cancel: function() {
+				delete channel.callbacks[gid]
+			}
+		}
 	}
 
 	var bump = function() {
-		ajax("/sub?ch1=0&cid=" + mart.cid, false, function (text, req) {
-			$("body").append("<pre>" + text + "<pre><hr>");
-			// read header: alert(req.getAllResponseHeaders("ETag"));
+		if (martd.request) {
+			martd.request.abort();
+		}
+		var url = "/sub?cid=" + martd.cid;
+		for (chan in martd.channels) {
+			url += ("&" + chan + "=" + martd.channels[chan]["etag"]);
+		}
+		ajax(url, false, function (text) {
 			// TODO: backoff on errors
-			window.setTimeout(bump, 0);
+			var resp = JSON.parse(text);
+			for (chan in resp.channels) {
+				martd.channels[chan].etag = resp.channels[chan].etag;
+				for (i in resp.channels[chan].payload) {
+					var payload = resp.channels[chan].payload[i];
+					for (j in martd.channels[chan].callbacks) {
+						martd.channels[chan].callbacks[j](payload);
+					}
+				}
+			}
+			window.setTimeout(bump, 1000);
 		});
 	}
-	return mart;
+	return martd;
 }();
