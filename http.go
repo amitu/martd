@@ -135,7 +135,7 @@ func SubHandler(w http.ResponseWriter, r *http.Request) {
 	subs := make([]*Channel, 0)
 	resp := &SubResponse{make(map[string]*ChanResponse), ""}
 
-	for k, _ := range r.Form {
+	for k := range r.Form {
 		if k == "cid" {
 			continue
 		}

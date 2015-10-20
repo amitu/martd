@@ -136,10 +136,14 @@ func (c *Channel) Json() ([]byte, error) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
-	m, _ := c.Messages.PeekNewest() // TODO handle error
-	return json.MarshalIndent(
-		map[string]int64{"etag": m.Created}, " ", "    ",
-	)
+	m, err := c.Messages.PeekNewest() // TODO handle error
+	if err == nil {
+		return json.MarshalIndent(
+			map[string]int64{"etag": m.Created}, " ", "    ",
+		)
+	} else {
+		return []byte("{\"etag\": 0}"), nil
+	}
 }
 
 func (ch *Channel) Append(resp *SubResponse, ith uint) {
