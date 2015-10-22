@@ -16,23 +16,25 @@ window.martd = function() {
 		return x;
 	};
 
-	var guid = (function() {
-		function s4() {
-			return Math.floor((1 + Math.random()) * 0x10000).toString(16).substring(1);
-		}
+	function s4() {
+		return Math.floor(
+			(1 + Math.random()) * 0x10000
+		).toString(16).substring(1);
+	}
 
-		return function() {
-			return (
-				s4() + s4() + '-' + s4() + '-' + s4() + '-' +
-				s4() + '-' + s4() + s4() + s4()
-			);
-		};
-	})();
+	var guid = function() {
+		return (
+			s4() + s4() + '-' + s4() + '-' + s4() + '-' +
+			s4() + '-' + s4() + s4() + s4()
+		);
+	};
 
 	var martd = {};
 	martd.request = null;
 	martd.channels = {};
 	martd.cid = guid();
+	martd.ever_bumped = false;
+	martd.forcing_close = false;
 
 	martd.sub = function(chan, etag, cb) {
 		var channel = martd.channels[chan]
@@ -47,7 +49,16 @@ window.martd = function() {
 
 		var gid = guid();
 		channel.callbacks[gid] = cb;
-		bump();
+
+		if (martd.ever_bumped) {
+			if (martd.request) {
+				martd.request.abort();
+				martd.forcing_close = true;
+			}
+		} else {
+			martd.ever_bumped = true;
+			bump();
+		}
 
 		return {
 			gid: gid,
@@ -58,30 +69,44 @@ window.martd = function() {
 	}
 
 	var bump = function() {
-		if (martd.request) {
-			martd.request.abort();
-		}
 		var url = "/sub?cid=" + martd.cid;
 		for (chan in martd.channels) {
-			url += ("&" + chan + "=" + martd.channels[chan]["etag"]);
+			if (Object.keys(martd.channels[chan].callbacks).length > 0) {
+				url += ("&" + chan + "=" + martd.channels[chan].etag);
+			}
 		}
 		martd.request = ajax(url, false, function (text) {
 			martd.request = null;
-			try{
+			try {
 				var resp = JSON.parse(text);
 				for (chan in resp.channels) {
-					martd.channels[chan].etag = resp.channels[chan].etag;
+					if (!martd.channels[chan]) {
+						console.log("Unknown channel: ", chan)
+						continue;
+					}
 					for (i in resp.channels[chan].payload) {
 						var payload = resp.channels[chan].payload[i];
 						for (j in martd.channels[chan].callbacks) {
-							martd.channels[chan].callbacks[j](payload);
+							try {
+								martd.channels[chan].callbacks[j](payload);
+							} catch (err) {
+								console.log(
+									"Callback Error: ", err, payload, chan, j
+								);
+							}
 						}
 					}
+					martd.channels[chan].etag = resp.channels[chan].etag;
 				}
 				window.setTimeout(bump, 0);
 			} catch (err) {
-				console.log("Error: ", err, text)
-				window.setTimeout(bump, 1000);
+				if (martd.forcing_close) {
+					martd.forcing_close = false;
+					window.setTimeout(bump, 0);
+				} else {
+					console.log("Error: ", err, text)
+					window.setTimeout(bump, 1000);
+				}
 			}
 		});
 	}
