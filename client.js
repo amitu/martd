@@ -65,19 +65,24 @@ window.martd = function() {
 		for (chan in martd.channels) {
 			url += ("&" + chan + "=" + martd.channels[chan]["etag"]);
 		}
-		ajax(url, false, function (text) {
-			// TODO: backoff on errors
-			var resp = JSON.parse(text);
-			for (chan in resp.channels) {
-				martd.channels[chan].etag = resp.channels[chan].etag;
-				for (i in resp.channels[chan].payload) {
-					var payload = resp.channels[chan].payload[i];
-					for (j in martd.channels[chan].callbacks) {
-						martd.channels[chan].callbacks[j](payload);
+		martd.request = ajax(url, false, function (text) {
+			martd.request = null;
+			try{
+				var resp = JSON.parse(text);
+				for (chan in resp.channels) {
+					martd.channels[chan].etag = resp.channels[chan].etag;
+					for (i in resp.channels[chan].payload) {
+						var payload = resp.channels[chan].payload[i];
+						for (j in martd.channels[chan].callbacks) {
+							martd.channels[chan].callbacks[j](payload);
+						}
 					}
 				}
+				window.setTimeout(bump, 0);
+			} catch (err) {
+				console.log("Error: ", err, text)
+				window.setTimeout(bump, 1000);
 			}
-			window.setTimeout(bump, 1000);
 		});
 	}
 	return martd;
