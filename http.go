@@ -92,7 +92,7 @@ func PubHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	life := time.Second * 10
+	life := time.Second * 60 * 60 // default expiry = one hr
 	if life_s != "" {
 		_, err := fmt.Sscan(life_s, &life)
 		if err != nil {
@@ -108,11 +108,7 @@ func PubHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(body) != 0 {
-		err := ch.Pub(body)
-		if err != nil {
-			reject(w, err.Error())
-			return
-		}
+		ch.Pub(body)
 	}
 
 	j, err := ch.Json()

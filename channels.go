@@ -75,25 +75,22 @@ func GetChannel_(name string) *Channel {
 	return ch
 }
 
-func (c *Channel) Pub(data []byte) error {
+func (c *Channel) Pub(data []byte) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
 	m := &Message{Data: data, Created: time.Now().UnixNano()}
 	old, _ := c.Messages.Push(m)
 
-	Persist(c.Name, m, old)
-
-	// we still do the thing here as persist failed, but actual message should
-	// still be transmitted to connected clients. best effort.
+	Persist(c, m, old)
 
 	for evch, _ := range c.Clients {
 		evch <- &ChannelEvent{c, m}
 	}
 
+	// we drop this because all clients are supposed to be gone when this
+	// succeeds, not sure if this is race free: TODO
 	c.Clients = make(map[chan *ChannelEvent]bool)
-
-	return nil
 }
 
 func (c *Channel) HasNew(etag int64) (bool, uint) {

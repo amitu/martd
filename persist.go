@@ -5,6 +5,7 @@ import (
 	"log"
 	_ "github.com/mattn/go-sqlite3"
 	"flag"
+	"time"
 )
 
 var (
@@ -19,12 +20,12 @@ func init() {
 }
 
 type DMessage struct {
-	channel string
-	m, old  *Message
+	c      *Channel
+	m, old *Message
 }
 
-func Persist(channel string, m, old *Message) {
-	PersistChan <- &DMessage{channel, m, old}
+func Persist(c *Channel, m, old *Message) {
+	PersistChan <- &DMessage{c, m, old}
 }
 
 func InsertPayload(dm *DMessage) {
@@ -33,13 +34,18 @@ func InsertPayload(dm *DMessage) {
 		log.Fatal(err)
 	}
 	stmt, err := tx.Prepare(
-		"insert into payloads(id, channel, payload) values(?, ?, ?)",
+		`insert into payloads(
+			id, channel, expiry, size, life, one2one, key, payload
+		) values (?, ?, ?, ?, ?, ?, ?, ?)`,
 	)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer stmt.Close()
-	_, err = stmt.Exec(dm.m.Created, dm.channel, dm.m.Data)
+	_, err = stmt.Exec(
+		dm.m.Created, dm.c.Name, dm.m.Created + int64(dm.c.Life), dm.c.Size,
+		dm.c.Life, dm.c.One2One, dm.c.Key, dm.m.Data,
+	)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -81,16 +87,21 @@ func GetDB() (*sql.DB, error) {
 	// check if table exists, if not create it
 	sqlStmt := `
 		create table payloads (
-			id integer not null primary key,
+			id      integer not null primary key,
 			channel text,
+			expiry  integer,
+			size    integer,
+			life    integer, -- number of seconds
+			one2one integer,
+			key     text,
 			payload blob
 		);
 	`
 	_, err = db.Exec(sqlStmt)
 	if err != nil {
-		log.Printf("Table already exists.")
+		log.Println("Table already exists:", err)
 	} else {
-		log.Printf("Table created.")
+		log.Println("Table created.")
 	}
 
 	return db, nil
@@ -104,17 +115,52 @@ func ReadChannels() error {
 	}
 	defer db.Close()
 
-	rows, err := db.Query("select id, channel, payload from payloads")
+
+	stmt, err := db.Prepare("delete from payloads where expiry < ?")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer stmt.Close()
+
+	_, err = stmt.Exec(time.Now().UnixNano())
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	rows, err := db.Query(
+		`select
+			id, channel, expiry, size, life, one2one, key, payload
+		from payloads`,
+	)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer rows.Close()
+
 	for rows.Next() {
-		var id int
-		var payload []byte
+		var id int64
 		var channel string
-		rows.Scan(&id, &channel, &payload)
-		log.Println(channel, id, string(payload))
+		var expiry int64
+		var size uint
+		var life int64
+		var one2one bool
+		var key string
+		var payload []byte
+		rows.Scan(
+			&id, &channel, &expiry, &size, &life, &one2one, &key, &payload,
+		)
+		log.Println(
+			channel, expiry, size, life, one2one, key, id, string(payload),
+		)
+		ch, err := GetOrCreateChannel(
+			channel, size, time.Duration(life), one2one, key,
+		)
+		if err != nil {
+			log.Fatalln("Error loading channel:", err)
+		}
+		log.Println(ch)
+		m := &Message{Data: payload, Created: id}
+		ch.Messages.Push(m)
 	}
 
 	return nil
