@@ -19,6 +19,9 @@ func DebugRoutine() {
 
 func main() {
 	flag.Parse()
+	ReadChannels()
+
+	go Persister()
 	if Debug {
 		go DebugRoutine()
 	}

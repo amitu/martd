@@ -17,8 +17,12 @@ func NewCircularMessageArray(size uint) *CircularMessageArray {
 	return &CircularMessageArray{CircularArray{Size: size}}
 }
 
-func (circ *CircularMessageArray) Push(buf *Message) {
-	circ.CircularArray.Push(buf)
+func (circ *CircularMessageArray) Push(buf *Message) (*Message, bool){
+	v, dropped := circ.CircularArray.Push(buf)
+	if dropped {
+		return v.(*Message), true
+	}
+	return nil, false
 }
 
 func (circ *CircularMessageArray) Pop() (*Message, error) {

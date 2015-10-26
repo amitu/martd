@@ -80,7 +80,12 @@ func (c *Channel) Pub(data []byte) error {
 	defer c.lock.Unlock()
 
 	m := &Message{Data: data, Created: time.Now().UnixNano()}
-	c.Messages.Push(m)
+	old, _ := c.Messages.Push(m)
+
+	Persist(c.Name, m, old)
+
+	// we still do the thing here as persist failed, but actual message should
+	// still be transmitted to connected clients. best effort.
 
 	for evch, _ := range c.Clients {
 		evch <- &ChannelEvent{c, m}
