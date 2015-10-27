@@ -107,11 +107,16 @@ func PubHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	etag := int64(0)
+
 	if len(body) != 0 {
-		ch.Pub(body)
+		etag = ch.Pub(body)
 	}
 
-	j, err := ch.Json()
+	j, err := json.MarshalIndent(
+		map[string]string{"etag": fmt.Sprintf("%d", etag)}, " ", "    ",
+	)
+
 	if err != nil {
 		reject(w, err.Error())
 		return

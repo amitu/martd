@@ -75,7 +75,7 @@ func GetChannel_(name string) *Channel {
 	return ch
 }
 
-func (c *Channel) Pub(data []byte) {
+func (c *Channel) Pub(data []byte) int64 {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
@@ -84,13 +84,22 @@ func (c *Channel) Pub(data []byte) {
 
 	Persist(c, m, old)
 
+	sentToSome := false
+
 	for evch, _ := range c.Clients {
 		evch <- &ChannelEvent{c, m}
+		sentToSome = true
 	}
 
 	// we drop this because all clients are supposed to be gone when this
 	// succeeds, not sure if this is race free: TODO
 	c.Clients = make(map[chan *ChannelEvent]bool)
+
+	if sentToSome && c.One2One {
+		c.Empty()
+	}
+
+	return m.Created
 }
 
 func (c *Channel) HasNew(etag int64) (bool, uint) {
@@ -149,6 +158,11 @@ func (c *Channel) Json() ([]byte, error) {
 	}
 }
 
+func (c *Channel) Empty() {
+	c.Messages.Empty()
+	EmptyChannel(c)
+}
+
 func (ch *Channel) Append(resp *SubResponse, ith uint) {
 	ch.lock.Lock()
 	defer ch.lock.Unlock()
@@ -162,6 +176,9 @@ func (ch *Channel) Append(resp *SubResponse, ith uint) {
 		etag = ithm.Created
 	}
 	resp.Channels[ch.Name] = &ChanResponse{fmt.Sprintf("%d", etag), payload}
+	if ch.One2One {
+		ch.Empty()
+	}
 }
 
 func stats() interface{} {

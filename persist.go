@@ -28,11 +28,32 @@ func Persist(c *Channel, m, old *Message) {
 	PersistChan <- &DMessage{c, m, old}
 }
 
+func EmptyChannel(c *Channel) {
+	PersistChan <- &DMessage{c, nil, nil}
+}
+
 func InsertPayload(dm *DMessage) {
 	tx, err := PersistDB.Begin()
 	if err != nil {
 		log.Fatal(err)
 	}
+	defer tx.Commit()
+
+	if dm.m == nil {
+		stmt, err := tx.Prepare("delete from payloads where channel = ?")
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer stmt.Close()
+
+		_, err = stmt.Exec(dm.c.Name)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		return
+	}
+
 	stmt, err := tx.Prepare(
 		`insert into payloads(
 			id, channel, expiry, size, life, one2one, key, payload
@@ -42,6 +63,7 @@ func InsertPayload(dm *DMessage) {
 		log.Fatal(err)
 	}
 	defer stmt.Close()
+
 	_, err = stmt.Exec(
 		dm.m.Created, dm.c.Name, dm.m.Created + int64(dm.c.Life), dm.c.Size,
 		dm.c.Life, dm.c.One2One, dm.c.Key, dm.m.Data,
@@ -56,12 +78,12 @@ func InsertPayload(dm *DMessage) {
 			log.Fatal(err)
 		}
 		defer stmt.Close()
+
 		_, err = stmt.Exec(dm.old.Created)
 		if err != nil {
 			log.Fatal(err)
 		}
 	}
-	tx.Commit()
 }
 
 func Persister() {
@@ -72,7 +94,6 @@ func Persister() {
 	}
 	for {
 		dm := <- PersistChan
-		log.Println(dm)
 		InsertPayload(dm)
 	}
 }

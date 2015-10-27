@@ -9,7 +9,7 @@ parser.add_argument("--size", default=10, type=int)
 args = parser.parse_args()
 
 print urllib2.urlopen(
-    "http://%s/pub?channel=%s&size=%s" % (
+    "http://%s/pub?channel=%s&size=%s&one2one=true" % (
         args.endpoint, args.channel, args.size
     ), args.message
 ).read()
