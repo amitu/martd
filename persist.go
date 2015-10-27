@@ -32,12 +32,46 @@ func EmptyChannel(c *Channel) {
 	PersistChan <- &DMessage{c, nil, nil}
 }
 
+func DumpChannels() {
+	PersistChan <- &DMessage{nil, nil, nil}
+}
+
 func InsertPayload(dm *DMessage) {
 	tx, err := PersistDB.Begin()
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer tx.Commit()
+
+	if dm.c == nil {
+		rows, err := tx.Query(
+			`select
+				id, channel, expiry, size, life, one2one, key, payload
+			from payloads order by channel desc`,
+		)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			var id int64
+			var channel string
+			var expiry int64
+			var size uint
+			var life int64
+			var one2one bool
+			var key string
+			var payload []byte
+			rows.Scan(
+				&id, &channel, &expiry, &size, &life, &one2one, &key, &payload,
+			)
+			log.Println(
+				channel, expiry, size, life, one2one, key, id, string(payload),
+			)
+		}
+		return
+	}
 
 	if dm.m == nil {
 		stmt, err := tx.Prepare("delete from payloads where channel = ?")

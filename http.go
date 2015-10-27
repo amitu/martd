@@ -31,6 +31,7 @@ var (
 	ServerStart time.Time
 	CIDM_lock   sync.RWMutex
 	nSub        = expvar.NewInt("nSub")
+	nList        = expvar.NewInt("nList")
 	nSubAll     = expvar.NewInt("nSubAll")
 	nPubAll     = expvar.NewInt("nPubAll")
 )
@@ -192,7 +193,15 @@ func SubHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func ListHandler(w http.ResponseWriter, r *http.Request) {
+	nList.Add(1)
+	DumpChannels()
+
+	w.Write([]byte("ok\n"))
+}
+
 func ServeHTTP() {
+	http.HandleFunc("/list", ListHandler)
 	http.HandleFunc("/pub", PubHandler)
 	http.HandleFunc("/sub", SubHandler)
 	http.Handle("/", http.FileServer(FS(Debug)))
