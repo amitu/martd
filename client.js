@@ -104,7 +104,9 @@ window.martd = function() {
 					martd.forcing_close = false;
 					window.setTimeout(bump, 0);
 				} else {
-					console.log("Error: ", err, text)
+					if (text) {
+						console.log("Error: ", err, text);
+					}
 					window.setTimeout(bump, 1000);
 				}
 			}

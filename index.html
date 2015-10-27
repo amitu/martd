@@ -3,21 +3,20 @@
 		<title>martd demo</title>
 	</head>
 	<body>
-		<script src="//ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js"></script>
 		<script src="client.js"></script>
 		<script>
-			$("body").append("<pre>Waiting<pre><hr>");
+			// $("body").append("<pre>Waiting<pre><hr>");
 
 			var handle = martd.sub("c1", 0, function(data){
-				console.log("c1 subing");
-				$("body").append("<pre>" + data + "<pre><hr>");
+				console.log(data);
+				// $("body").append("<pre>" + data + "<pre><hr>");
 			});
 
 			window.setTimeout(
 				function(){
-					console.log("c2 subing");
 					var handle = martd.sub("c2", 0, function(data){
-						$("body").append("<pre>C2: " + data + "<pre><hr>");
+						console.log("c2:", data);
+						// $("body").append("<pre>C2: " + data + "<pre><hr>");
 					});
 				}, 2000
 			);
