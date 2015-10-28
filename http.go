@@ -67,6 +67,7 @@ func respond(w http.ResponseWriter, resp *SubResponse) {
 }
 
 func PubHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
 	nPubAll.Add(1)
 
 	body, err := ioutil.ReadAll(r.Body)
@@ -107,6 +108,11 @@ func PubHandler(w http.ResponseWriter, r *http.Request) {
 	ch, err := GetOrCreateChannel(channel, size, life, one2one, key)
 	if err != nil {
 		reject(w, err.Error())
+		return
+	}
+
+	if ch.Key != "" && ch.Key != key {
+		reject(w, "invalid key: "+err.Error())
 		return
 	}
 

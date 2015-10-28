@@ -36,6 +36,14 @@ window.martd = function() {
 	martd.ever_bumped = false;
 	martd.forcing_close = false;
 
+    martd.pub = function(name, size, life, one2one, key, payload, callback) {
+        var url = (
+            "/pub?channel=" + name + "&size=" + size + "&life=" + life +
+            "&one2one=" + one2one + "&key=" + key
+        );
+		ajax(martd.SERVER + url, payload, callback);
+    };
+
 	martd.sub = function(chan, cb, etag) {
 		if (!etag) etag = 0;
 
