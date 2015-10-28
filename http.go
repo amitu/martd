@@ -112,7 +112,7 @@ func PubHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if ch.Key != "" && ch.Key != key {
-		reject(w, "invalid key: "+err.Error())
+		reject(w, "invalid key")
 		return
 	}
 
