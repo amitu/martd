@@ -68,6 +68,10 @@ window.setTimeout(
 /* martd.cid is a uniq id generated on each page load. */
 ```
 
+Check [sub.py](https://github.com/amitu/martd/blob/master/sub.py) that I use for
+testing on command line, and
+[index.html](https://github.com/amitu/martd/blob/master/index.html) for browser.
+
 
 
 
@@ -94,6 +98,8 @@ attributes.
 Each push to channel must contain all attributes, as channel can be dropped
 anytime, whenever there is no data left in channel and no client is connected.
 
+Check [publish.py](https://github.com/amitu/martd/blob/master/publish.py) that
+I use for testing.
 
 
 
