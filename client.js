@@ -7,7 +7,6 @@ window.martd = function() {
 		if (etag) {
 			x.setRequestHeader('If-None-Match', etag);
 		}
-		x.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
 		x.setRequestHeader('Content-type', 'application/x-www-form-urlencoded');
 		x.onreadystatechange = function () {
 			x.readyState > 3 && callback && callback(x.responseText, x);
@@ -30,11 +29,20 @@ window.martd = function() {
 	};
 
 	var martd = {};
+	martd.SERVER = "http://localhost:54321";
 	martd.request = null;
 	martd.channels = {};
 	martd.cid = guid();
 	martd.ever_bumped = false;
 	martd.forcing_close = false;
+
+    martd.pub = function(name, size, life, one2one, key, payload, callback) {
+        var url = (
+            "/pub?channel=" + name + "&size=" + size + "&life=" + life +
+            "&one2one=" + one2one + "&key=" + key
+        );
+		ajax(martd.SERVER + url, payload, callback);
+    };
 
 	martd.sub = function(chan, cb, etag) {
 		if (!etag) etag = 0;
@@ -77,7 +85,7 @@ window.martd = function() {
 				url += ("&" + chan + "=" + martd.channels[chan].etag);
 			}
 		}
-		martd.request = ajax(url, false, function (text) {
+		martd.request = ajax(martd.SERVER + url, false, function (text) {
 			martd.request = null;
 			try {
 				var resp = JSON.parse(text);

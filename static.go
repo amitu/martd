@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"compress/gzip"
+	"encoding/base64"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -11,17 +12,23 @@ import (
 	"time"
 )
 
-type localFS struct{}
+type _escLocalFS struct{}
 
-var local localFS
+var _escLocal _escLocalFS
 
-type staticFS struct{}
+type _escStaticFS struct{}
 
-var static staticFS
+var _escStatic _escStaticFS
 
-type file struct {
+type _escDir struct {
+	fs   http.FileSystem
+	name string
+}
+
+type _escFile struct {
 	compressed string
 	size       int64
+	modtime    int64
 	local      string
 	isDir      bool
 
@@ -30,16 +37,16 @@ type file struct {
 	name string
 }
 
-func (_ localFS) Open(name string) (http.File, error) {
-	f, present := data[name]
+func (_escLocalFS) Open(name string) (http.File, error) {
+	f, present := _escData[path.Clean(name)]
 	if !present {
 		return nil, os.ErrNotExist
 	}
 	return os.Open(f.local)
 }
 
-func (_ staticFS) Open(name string) (http.File, error) {
-	f, present := data[path.Clean(name)]
+func (_escStaticFS) prepare(name string) (*_escFile, error) {
+	f, present := _escData[path.Clean(name)]
 	if !present {
 		return nil, os.ErrNotExist
 	}
@@ -50,7 +57,8 @@ func (_ staticFS) Open(name string) (http.File, error) {
 			return
 		}
 		var gr *gzip.Reader
-		gr, err = gzip.NewReader(bytes.NewBufferString(f.compressed))
+		b64 := base64.NewDecoder(base64.StdEncoding, bytes.NewBufferString(f.compressed))
+		gr, err = gzip.NewReader(b64)
 		if err != nil {
 			return
 		}
@@ -59,54 +67,65 @@ func (_ staticFS) Open(name string) (http.File, error) {
 	if err != nil {
 		return nil, err
 	}
-	return f.File()
-}
-
-func (f *file) File() (http.File, error) {
-	return &httpFile{
-		Reader: bytes.NewReader(f.data),
-		file:   f,
-	}, nil
-}
-
-type httpFile struct {
-	*bytes.Reader
-	*file
-}
-
-func (f *file) Close() error {
-	return nil
-}
-
-func (f *file) Readdir(count int) ([]os.FileInfo, error) {
-	return nil, nil
-}
-
-func (f *file) Stat() (os.FileInfo, error) {
 	return f, nil
 }
 
-func (f *file) Name() string {
+func (fs _escStaticFS) Open(name string) (http.File, error) {
+	f, err := fs.prepare(name)
+	if err != nil {
+		return nil, err
+	}
+	return f.File()
+}
+
+func (dir _escDir) Open(name string) (http.File, error) {
+	return dir.fs.Open(dir.name + name)
+}
+
+func (f *_escFile) File() (http.File, error) {
+	type httpFile struct {
+		*bytes.Reader
+		*_escFile
+	}
+	return &httpFile{
+		Reader:   bytes.NewReader(f.data),
+		_escFile: f,
+	}, nil
+}
+
+func (f *_escFile) Close() error {
+	return nil
+}
+
+func (f *_escFile) Readdir(count int) ([]os.FileInfo, error) {
+	return nil, nil
+}
+
+func (f *_escFile) Stat() (os.FileInfo, error) {
+	return f, nil
+}
+
+func (f *_escFile) Name() string {
 	return f.name
 }
 
-func (f *file) Size() int64 {
+func (f *_escFile) Size() int64 {
 	return f.size
 }
 
-func (f *file) Mode() os.FileMode {
+func (f *_escFile) Mode() os.FileMode {
 	return 0
 }
 
-func (f *file) ModTime() time.Time {
-	return time.Time{}
+func (f *_escFile) ModTime() time.Time {
+	return time.Unix(f.modtime, 0)
 }
 
-func (f *file) IsDir() bool {
+func (f *_escFile) IsDir() bool {
 	return f.isDir
 }
 
-func (f *file) Sys() interface{} {
+func (f *_escFile) Sys() interface{} {
 	return f
 }
 
@@ -114,26 +133,102 @@ func (f *file) Sys() interface{} {
 // the filesystem's contents are instead used.
 func FS(useLocal bool) http.FileSystem {
 	if useLocal {
-		return local
+		return _escLocal
 	}
-	return static
+	return _escStatic
 }
 
-var data = map[string]*file{
+// Dir returns a http.Filesystem for the embedded assets on a given prefix dir.
+// If useLocal is true, the filesystem's contents are instead used.
+func Dir(useLocal bool, name string) http.FileSystem {
+	if useLocal {
+		return _escDir{fs: _escLocal, name: name}
+	}
+	return _escDir{fs: _escStatic, name: name}
+}
+
+// FSByte returns the named file from the embedded assets. If useLocal is
+// true, the filesystem's contents are instead used.
+func FSByte(useLocal bool, name string) ([]byte, error) {
+	if useLocal {
+		f, err := _escLocal.Open(name)
+		if err != nil {
+			return nil, err
+		}
+		return ioutil.ReadAll(f)
+	}
+	f, err := _escStatic.prepare(name)
+	if err != nil {
+		return nil, err
+	}
+	return f.data, nil
+}
+
+// FSMustByte is the same as FSByte, but panics if name is not present.
+func FSMustByte(useLocal bool, name string) []byte {
+	b, err := FSByte(useLocal, name)
+	if err != nil {
+		panic(err)
+	}
+	return b
+}
+
+// FSString is the string version of FSByte.
+func FSString(useLocal bool, name string) (string, error) {
+	b, err := FSByte(useLocal, name)
+	return string(b), err
+}
+
+// FSMustString is the string version of FSMustByte.
+func FSMustString(useLocal bool, name string) string {
+	return string(FSMustByte(useLocal, name))
+}
+
+var _escData = map[string]*_escFile{
 
 	"/client.js": {
-		local:      "client.js",
-		size:       2701,
-		compressed: "\x1f\x8b\b\x00\x00\tn\x88\x00\xff\x8cV\xdfo\xdb6\x10~\x96\xff\n\xce\x0f\x91\xb4Ȳ\xd3\f)\xe0 +\x86\xa2X7,M1{X\x80 (h\xe9lˑI\x8f\xa2b\x1bM\xfe\xf7ݑ\x94,\xf9G\xd0<X\xd2\xf1\x8ew\xdf\xc7\xef\x8e\xe9\xf7\xd9\\\xebU1\xec\xf7gY\xa1\xe3Y\xa6\xe7\xe5$N\xe4\xb2\u007f\x0fR$J\x16E\xff\xfd\xd5\xd5\xe5\xbb\xf7\x97\x9d\xce:\x13\xa9\\\xc7K\xaet\xcanش\x14\x89Τ\bB\xf6\xbd\xe3=s\xc5\xf8\x82o\x1a\v,(U\x1e\xb1\x94k\x1e\xb1\x84\xe7\xf9\x84'O\x11\x03\xcdg&\xc4\xc4P\x80\x80u\xa0\xe7Y\x11\xdf\xdf\xfe\xf5\x19\xeb\xf9\x1b\xfe+\xa1\xd0\xec\xe5\x85\xfd\x86;=\xc3\xfd\xddd\x01\x89\x0e\x03\xffv\x84>\xef\x8c\xe3x\xfc5\xbe\x8c\a~x\x8d[mb\xb9\x02\x11P.\xf6\x81\xf9_\xefFc\x9f\r\x99\xff\xfb\xa7\xb1\x1f1Sǅq̦,\xd8U\x80q\x05h\x97\xef3\xf0\x14T\xe0\xff1\xed}\x91\x02z\xb7\\'s\xdf\x15L\xb1\xaf\x9d\xe3\x01\xf7=g\x80\xb4\xf7/R\x881~\x1bJU\xe4a\xecG)4\b\xdd\xd3\xdb\x15P\x1c_\xad\xf2,\xe1\xc4_\u007f\xd3[\xaf\u05fd\xa9T\xcb\x1e\"\x00\x91\xc8\x14\xd2\x1a\xafP\xb8Ŷ\xd0\\C2\xe7b\x06-\xeak|\xc6kD^\xecWv\xc9\xce\xce\xea\xa3h\xbe\a\xe4X\xac\xa4(`\f\x1b\x1d\xb1\x8dE\\\x95-Rí1*Х\x12l\x83\xef\xb8\xde\xf1\xea\xa4\xc5/.\xad\xf3@\x02\xe7\xf14\x97R\x05TKp\xc1έMqT\xd22\bC\xf63\x1bl.\x06\xf8\x87\x0ea\xac\xe5H\xabL̂\x8b\xab0.\xcaI\xe1\xbe(\xedkǊlVf\x87\xea\xab2\x9a<\xa6\x8cs\xe6\x1e~\xcf\u007f\xeb\xa3\x11\xd0Zl<\xa8\xb4\n+UP5\xc0wb\xc7| wV\xb1\xa8\xe52\xcfk3\x9d\x8b\x80\xbch;'\x06\x00\xe1\b\xc2\xda\bϠ\xbeM\xca\xe5\n\f:\x9e\x17P\xaf\xa1\x02\x12\xe4\xe1[\x92\xcb\x02v\xab\xd52\x12\xd5$\x84\x92b\xbfM\x9a\x9dF\xaa\xff\xc9~\xd2/\xba\x0f(\xde\xc0qE\xa2\xad]\xf4\x03\xbd<V\xc1\xce\xead\xb5\x8b1\x9f\x9e\xe0K\x18\x9a\x9d\"\xf3MI\x86&\x95\xfd\xaedV\f\x91\b\xb2\x98\x9fc\xf9pKg\xb0\x1d犜\xb59\xab\n\x88\xeb\x8d\x1f\xd0\xc3\x04O\f0\xaa\xf9\x80XW\xfcn\xcd\x1d\x9b\xb3\xb7\xcf2\xe6\x13\xa9\xb4\xcd\xe6\x9d8\b\xadJ\xb8\xae\xe0\xbc2\x04\x01v\xabcgZ;\x93%\bkxN\xba&\x0eA\f\t\xaba-\xe1\"\x81|\xb8/u\xcfK!\al\xe7\xe3\x1c\xd4\xe5\xecZ\x86\x12\x1e\xb6\f\xad\xe0X\xc1\x85n\x1f%\xf4\x01ey\xd3E\xc9\xd7\"\xa5\n\x1113\x8ab\x99\xd8\xd3G\x83M;\x9e\xe3'\xd8\x16\xc1\xb1Cݕ\x18\xc68\xc7fz\x8e\xb3hP\xc1\xa1\"\xceoX\xd0=\xa3\xf4&\xd99\xeb6kioV\xcf\xe3\n\xe7A\x13\xd2Ed/\x1f\xd3*Qc.j\x9cna\xf3\x90\x0eZ\xd7\xf3\xb4ں҈#\x9a\x8b\xb8\xfa\xe7\xe8\xeeK\xbc\xe2\xaa\x00\xbb\x87\xd5E\x8b\x1f\xf2ܧǵ\xcf1 \xb5\x87\x97\xe0ܕ9Ĺ\x9c\x05\xdd\u007fē\x90kQ\x1d\xef\x90u#\xf3\x1e\xee\x9cu&\x9c\x96\\'\xb9B\xb2\x83*\x1ce+\xbe\xcd%Ow\x19\t\x983\"\xb67B\x1e\xb2G\x97ȦX\x1c\n\xe1\xe0\x8c\xeb,\r&\xbd\x13\xfd\xdeP\xef\xe21\xa8\xea\xacRbS%t\v㝭Tc\xdf\x16c\xb5\xd1\xeb~\xac\xae\xb6OJIe\xa8\xc3\xc0\xa8\x82j\x89\x8cآ\x0eid괞\xeeqR\x80'X\xa3%\xbb\xa5\xdd\xc0\xfdτ\xf7\xfe8[\x82,u@\xcd\x18\xa1\xf8\xad\x80\x8f\xc0ۍ\xa7ָ\xa9ѿy'x?\x90\xb45\xa9l\xbeFW\xec\xcbq\x8fɆ\xf6+\x8eN\xa5\xa3{=l\x90a\xba\xd5^\xe5\xd5\xd03X\xae;\xaf4\x0e\xff\x0f\x00\x00\xff\xff\xfe\xe2\xb1\xe5\x8d\n\x00\x00",
+		local:   "client.js",
+		size:    2985,
+		modtime: 1446021004,
+		compressed: `
+H4sIAAAJbogA/4xWbW/bthN/LX8K/v0ikv6R5Tx0LeCgK4YiWDesTRF7Q4AgKGiZtpXIpEdSsbM23313
+J4qSYjuYAevheI8//u6o4ZAtrV2b0XC4yI1NF7ldltM0U6vhjVAy08qY4bu3b8/P3p33eptcztQmXXFt
+Z+w9m5cys7mSUcy+94JHrhm/59vWAotKXSRsxi1PWMaLYsqzh4QJyxdkQjZoIMUmssvcpDef//gE+VyL
+v0thLPvxg/0Cnh7FzdX0XmQ2jsLPY9A5I8XJ5Gt6np6E8QW42qZqLWSEsdgHFn69Gk9CNmLhr5eTMGGU
+xykp5nMWNRmAnRHWxfsk+EzoKPxtPviipBh85jZbhi5htH3u7Tf4qKQV0g7s01qAfsjX6yLPOGIw3A42
+m81grvRqAFkImamZmPmcpQYXT8ZyK7IllwvRgc/nSFpj1GI/s3N2dOThbD9HqGjWShoxEVubsG2V9YVL
+W84IHxJqYUst2RaeYb0X+KDmjQvrNACEZTovlNIR5hKdsuNKpjmwYRXFMfs/O9mensAPFOLUqrHVuVxE
+p2/j1JRT494w7HOvIsqizHcZVEekOJTGMXO3cBC+9tIy6Cy2bphaXStmUJP4O6JDL+n48vqvy2uQ9bEn
+oCUKBcgulbGjn96cn532vaZ2/ATmlkXhxbiDUhSm6zajUrHiKPZC8Sj0t2m5WgvCgRdG+DXgSgaIfcsK
+ZUSz2mPwqzTW5bSNnuQrkTCT/wPXIp/DFdh7Bv+EPYinhK35U6H4rOlBhJu5H4IBxAR/kZfhrz+EKB9c
+Se/7ACOGgVv/CCORBB9IglFJgg+wHx1HRy4bUnDPZAXJkQzu3oLIiXMk6mzKcdXCu5VckCVta2Vguthg
+AaA+bY8dHAH/q17xCuonaE+8cAWDrLunt/hwVxs7qevPxoZeAwRqRJ4SescgIwpVvdfJmxHwBCV02RcP
+XDpBNX5ckosupeoEUu/4FjTIeEqFYc47vHPJN2uO1U7epXrKp0rbKlpwgKdWl+KiLueZQRGicrWP8l4Z
+JVHsy3MzgOygiBHWSqhlXGaiGL2cGUEwE4WAubgfA59OM3sw4O7sadqgPzRI/HxG3PQ9jBlCxYwYxXL5
+gh8tNKuzKgVWm2jfpjYpxikcCAu7hKF+UpeDSRxDM/aPMDwFg15p59J15g+nus6dGXWwm2iwJK3zxsKp
+Ebf3bGfQBYHVTy5ThAzPG1j9fXz1JV1zbUTlo6JJBy7UfImW66Z9dXmNIIPzTBUiLdQi6v8pH6TayHq3
+R6yf0HPcKNtcOmq5xnKJ5DtZOATdUGkiYmFOCLW9YnKb37lAVYj7XV7sbLmP0kIyOND+LTLf30V1nnVI
+6LEMv1Dge0brlt8OYl4Y9D/WnwyXWitN0IFhe6jSrLz3Jq1Ivc7d3Q7y8QBquFS5rBy470n4nprkK6FK
+G2FvJtALFZ/3lNdMq8708dW/eoIG/yFoZ3BV8Vpd8ZKOL5Bscb/G6FA4/F6KW2BQ81afSPUMpFoues84
+Hf8NAAD//3qDczWpCwAA
+`,
 	},
 
 	"/index.html": {
-		local:      "index.html",
-		size:       528,
-		compressed: "\x1f\x8b\b\x00\x00\tn\x88\x00\xff|\x92\xbfj\xc30\x10\x87g\xe7)\x0e\xd1\xc1\xa1\xc1r=&\x8a\x97\xbeB\xa1\xb3\"\xa9\xb1\x8a,\x19\xe9\xdcPJ\u07fd\xfac\x8a38\xd3\x1d\xe7\xef\xfc\xfb\xe0\xc4\x06\x1cM\xbf\xabؠ\xb8\x8c\xb5b\xa8Ѩ~\xe4\x1e%H5:F\xcb$2t\x81\xd8\xc5\xc9\xef\f\a\xe1\xf5\x84\x10\xbc8\x13a\xb4\xb2\xd8|\x06\xd23Z>\xac\x98\xd4V\x94\xc2SM\xd26\xd97|\x9a\x94\x955a\x93W\xfd;ר\xed5\xf7l\xf0=ٟvi\xe3\x8b{\x18\xb8\x95F\xc1\x19\xb2T\x13\xe6KM\xc4\v9\xc0\xc7l\x05jgkɑ\xef\u007f\x12_\tg\x833\xaa1\xeeZƧ<\xdeN&\xf0\f\t\x8c\x85\xdc\xc5ǭ\xdf\xc5⦭t\xb7&(|ӣr3\xd6\xf9\xa7\xff\xf9K\xf6\xb6m\xb7a{\xef\x1b\xb9c\x04Wڏ\xc4_\xbb#<\x92/\xfa\xb9\x1e\xa0k\xdb6\xf5y\xb2:\x0f\xa3\xe5\x96\xf1\xb6\xf9!\xfc\x05\x00\x00\xff\xff\xcb5\x8b^\x10\x02\x00\x00",
+		local:   "index.html",
+		size:    528,
+		modtime: 1446019182,
+		compressed: `
+H4sIAAAJbogA/3ySv2rDMBCHZ+cpDtHBocFyPSaKl75CobMiqbGKLBnp3FBK3736Y4ozONMd5+/8++DE
+BhxNv6vYoLiMtWKo0ah+5B4lSDU6RsskMnSB2MXJ7wwH4fWEELw4E2G0sth8BtIzWj6smNRWlMJTTdI2
+2Td8mpSVNWGTV/0716jtNfds8D3Zn3Zp44t7GLiVRsEZslQT5ktNxAs5wMdsBWpna8mR738SXwlngzOq
+Me5axqc83k4m8AwJjIXcxcet38Xipq10tyYofNOjcjPW+af/+Uv2tm23YXvvG7ljBFfaj8RfuyM8ki/6
+uR6ga9s29XmyOg+j5Zbxtvkh/AUAAP//yzWLXhACAAA=
+`,
 	},
 
 	"/": {
 		isDir: true,
+		local: "/",
 	},
 }
