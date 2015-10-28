@@ -7,14 +7,14 @@
 		<script>
 			// $("body").append("<pre>Waiting<pre><hr>");
 
-			var handle = martd.sub("c1", 0, function(data){
+			var handle = martd.sub("c1", function(data){
 				console.log(data);
 				// $("body").append("<pre>" + data + "<pre><hr>");
 			});
 
 			window.setTimeout(
 				function(){
-					var handle = martd.sub("c2", 0, function(data){
+					var handle = martd.sub("c2", function(data){
 						console.log("c2:", data);
 						// $("body").append("<pre>C2: " + data + "<pre><hr>");
 					});

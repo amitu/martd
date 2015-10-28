@@ -49,15 +49,24 @@ A demo will be available at http://martd.amitu.com
 ## Client API
 
 
-handle = martd.on("ch", function(d){}); // .on() should be called before .sub()
-handle = martd.sub("channel", function(){ /*subscribed*/ }, etag /*optional*/);
-martd.unsub("channel", function(){ /*unsubscribed*/ });
-martd.pub(channel, key, data)
+```javascript
+var handle = martd.sub(
+	"channel", function(payload){
+		/* called everytime we get payload on channel */
+		/*
+			payload is raw data, if you are expecting to be JSON, you will have
+			JSON.parse() it here
+		*/
+	}, etag /* optional */
+);
 
-handle.cancel() cancles subscription and data binding.
+/* handle can be used to unsubscribe */
+window.setTimeout(
+	handle.cancel, 10000 // cancles subscription after 10 seconds
+)
 
-martd.client_id is a uniq id generated on each page load.
-
+/* martd.cid is a uniq id generated on each page load. */
+```
 
 
 
@@ -73,16 +82,13 @@ channels.
 Channels can have types. The first "push" to channel sets the channel
 attributes.
 
-.size=1, max data in channel is stored in a "circular queue". Oldest messages
+- `.size=10`, max data in channel is stored in a "circular queue". Oldest messages
          are dropped to make way for new ones.
-
-.life=600s, max life of data in channel.
-
-.one2one, only one client allowed in this channel, subsequent clients are
+- `.life=3600`, max life of data in channel.
+- `.one2one=false`, only one client allowed in this channel, subsequent clients are
          rejected. If more than one are already connected when this attribute is
          being set, first one is left and rest ones are kicked out.
-
-.key=key, unique key that acts like password for this channel, all push require
+- `.key=key`, unique key that acts like password for this channel, all push require
          this key.
 
 Each push to channel must contain all attributes, as channel can be dropped

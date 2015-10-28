@@ -36,7 +36,9 @@ window.martd = function() {
 	martd.ever_bumped = false;
 	martd.forcing_close = false;
 
-	martd.sub = function(chan, etag, cb) {
+	martd.sub = function(chan, cb, etag) {
+		if (!etag) etag = 0;
+
 		var channel = martd.channels[chan]
 		if (!channel) {
 			channel = {
