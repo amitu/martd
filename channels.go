@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"sync"
 	"time"
+	"log"
 	"fmt"
 )
 
@@ -36,6 +37,14 @@ var (
 
 func init() {
 	Channels = make(map[string]*Channel)
+	go PeriodicExpireMessages()
+}
+
+func PeriodicExpireMessages() {
+	for {
+		time.Sleep(time.Second)
+		ExpireMessages()
+	}
 }
 
 func GetOrCreateChannel(
@@ -73,6 +82,30 @@ func GetChannel_(name string) *Channel {
 		// TODO spawn a goroutine to delete this channel?
 	}
 	return ch
+}
+
+func (c *Channel) ExpireOldMessages(now int64) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
+	if c.Messages == nil {
+		log.Println("Expired Called on Empty Channel:", c.Name)
+		return
+	}
+
+
+	for {
+		m, err := c.Messages.PeekOldest()
+		if err != nil {
+			break
+		}
+
+		if m.Created + int64(c.Life) > now {
+			break
+		}
+
+		c.Messages.Pop()
+	}
 }
 
 func (c *Channel) Pub(data []byte) int64 {

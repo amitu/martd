@@ -36,12 +36,54 @@ func DumpChannels() {
 	PersistChan <- &DMessage{nil, nil, nil}
 }
 
+func ExpireMessages() {
+	PersistChan <- nil
+}
+
 func InsertPayload(dm *DMessage) {
 	tx, err := PersistDB.Begin()
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer tx.Commit()
+
+	if dm == nil {
+		stmt, err := tx.Prepare(
+			`select distinct(channel) from payloads where expiry < ?`,
+		)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer stmt.Close()
+
+		now := time.Now().UnixNano()
+		rows, err := stmt.Query(now)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			var channel string
+			rows.Scan(&channel)
+			log.Println(channel, "has expired messages")
+			ch := GetChannel(channel)
+			ch.ExpireOldMessages(now)
+		}
+
+		stmt, err = tx.Prepare("delete from payloads where expiry < ?")
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer stmt.Close()
+
+		_, err = stmt.Exec(now)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		return
+	}
 
 	if dm.c == nil {
 		rows, err := tx.Query(
