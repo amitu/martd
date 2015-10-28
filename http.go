@@ -16,7 +16,7 @@ import (
 )
 
 type ChanResponse struct {
-	Etag    string    `json:"etag"`
+	Etag    string   `json:"etag"`
 	Payload []string `json:"payload"`
 }
 
@@ -31,7 +31,7 @@ var (
 	ServerStart time.Time
 	CIDM_lock   sync.RWMutex
 	nSub        = expvar.NewInt("nSub")
-	nList        = expvar.NewInt("nList")
+	nList       = expvar.NewInt("nList")
 	nSubAll     = expvar.NewInt("nSubAll")
 	nPubAll     = expvar.NewInt("nPubAll")
 )
@@ -45,6 +45,7 @@ func init() {
 }
 
 func reject(w http.ResponseWriter, reason string) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
 	j, err := json.Marshal(SubResponse{Error: reason})
 	if err != nil {
 		log.Println("Error during json.Marshal", err)
@@ -55,6 +56,7 @@ func reject(w http.ResponseWriter, reason string) {
 }
 
 func respond(w http.ResponseWriter, resp *SubResponse) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
 	j, err := json.Marshal(resp)
 	if err != nil {
 		log.Println("Error during json.Marshal", err)

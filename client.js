@@ -7,7 +7,6 @@ window.martd = function() {
 		if (etag) {
 			x.setRequestHeader('If-None-Match', etag);
 		}
-		x.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
 		x.setRequestHeader('Content-type', 'application/x-www-form-urlencoded');
 		x.onreadystatechange = function () {
 			x.readyState > 3 && callback && callback(x.responseText, x);
@@ -30,6 +29,7 @@ window.martd = function() {
 	};
 
 	var martd = {};
+	martd.SERVER = "http://localhost:54321";
 	martd.request = null;
 	martd.channels = {};
 	martd.cid = guid();
@@ -77,7 +77,7 @@ window.martd = function() {
 				url += ("&" + chan + "=" + martd.channels[chan].etag);
 			}
 		}
-		martd.request = ajax(url, false, function (text) {
+		martd.request = ajax(martd.SERVER + url, false, function (text) {
 			martd.request = null;
 			try {
 				var resp = JSON.parse(text);
