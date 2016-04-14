@@ -1,0 +1,12 @@
+[submodule "vendor/src/github.com/mjibson/esc"]
+	path = vendor/src/github.com/mjibson/esc
+	url = https://github.com/mjibson/esc.git
+[submodule "vendor/src/github.com/amitu/gutils"]
+	path = vendor/src/github.com/amitu/gutils
+	url = https://github.com/amitu/gutils.git
+[submodule "vendor/src/github.com/kr/s3"]
+	path = vendor/src/github.com/kr/s3
+	url = https://github.com/kr/s3.git
+[submodule "vendor/src/github.com/mattn/go-sqlite3"]
+	path = vendor/src/github.com/mattn/go-sqlite3
+	url = https://github.com/mattn/go-sqlite3.git

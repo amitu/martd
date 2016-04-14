@@ -20,7 +20,7 @@ type _escStaticFS struct{}
 
 var _escStatic _escStaticFS
 
-type _escDir struct {
+type _escDirectory struct {
 	fs   http.FileSystem
 	name string
 }
@@ -32,8 +32,8 @@ type _escFile struct {
 	local      string
 	isDir      bool
 
-	data []byte
 	once sync.Once
+	data []byte
 	name string
 }
 
@@ -78,7 +78,7 @@ func (fs _escStaticFS) Open(name string) (http.File, error) {
 	return f.File()
 }
 
-func (dir _escDir) Open(name string) (http.File, error) {
+func (dir _escDirectory) Open(name string) (http.File, error) {
 	return dir.fs.Open(dir.name + name)
 }
 
@@ -142,9 +142,9 @@ func FS(useLocal bool) http.FileSystem {
 // If useLocal is true, the filesystem's contents are instead used.
 func Dir(useLocal bool, name string) http.FileSystem {
 	if useLocal {
-		return _escDir{fs: _escLocal, name: name}
+		return _escDirectory{fs: _escLocal, name: name}
 	}
-	return _escDir{fs: _escStatic, name: name}
+	return _escDirectory{fs: _escStatic, name: name}
 }
 
 // FSByte returns the named file from the embedded assets. If useLocal is
@@ -189,7 +189,7 @@ var _escData = map[string]*_escFile{
 	"/client.js": {
 		local:   "client.js",
 		size:    2985,
-		modtime: 1446021004,
+		modtime: 1460628608,
 		compressed: `
 H4sIAAAJbogA/4xWbW/bthN/LX8K/v0ikv6R5Tx0LeCgK4YiWDesTRF7Q4AgKGiZtpXIpEdSsbM23313
 J4qSYjuYAevheI8//u6o4ZAtrV2b0XC4yI1NF7ldltM0U6vhjVAy08qY4bu3b8/P3p33eptcztQmXXFt
@@ -217,7 +217,7 @@ Hf8NAAD//3qDczWpCwAA
 	"/index.html": {
 		local:   "index.html",
 		size:    528,
-		modtime: 1446019182,
+		modtime: 1460628608,
 		compressed: `
 H4sIAAAJbogA/3ySv2rDMBCHZ+cpDtHBocFyPSaKl75CobMiqbGKLBnp3FBK3736Y4ozONMd5+/8++DE
 BhxNv6vYoLiMtWKo0ah+5B4lSDU6RsskMnSB2MXJ7wwH4fWEELw4E2G0sth8BtIzWj6smNRWlMJTTdI2
