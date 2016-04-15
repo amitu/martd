@@ -29,7 +29,7 @@ window.martd = function() {
 	};
 
 	var martd = {};
-	martd.SERVER = "http://localhost:54321";
+	martd.SERVER = "";
 	martd.request = null;
 	martd.channels = {};
 	martd.cid = guid();
