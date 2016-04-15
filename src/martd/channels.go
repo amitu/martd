@@ -35,6 +35,10 @@ var (
 	ChannelLock sync.RWMutex
 )
 
+var (
+	ETag0 = []byte("{\"etag\": \"0\"}")
+)
+
 func init() {
 	Channels = make(map[string]*Channel)
 	go PeriodicExpireMessages()
@@ -187,7 +191,7 @@ func (c *Channel) Json() ([]byte, error) {
 			map[string]string{"etag": fmt.Sprintf("%d", m.Created)}, " ", "    ",
 		)
 	} else {
-		return []byte("{\"etag\": \"0\"}"), nil
+		return ETag0, nil
 	}
 }
 

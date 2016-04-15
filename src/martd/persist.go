@@ -196,7 +196,7 @@ func GetDB() (*sql.DB, error) {
 	`
 	_, err = db.Exec(sqlStmt)
 	if err != nil {
-		log.Println("Table already exists:", err)
+		log.Println(err)
 	} else {
 		log.Println("Table created.")
 	}
