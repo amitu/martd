@@ -32,10 +32,15 @@ var (
 	nList       = expvar.NewInt("nList")
 	nSubAll     = expvar.NewInt("nSubAll")
 	nPubAll     = expvar.NewInt("nPubAll")
+	origin      string
 )
 
 func init() {
 	flag.StringVar(&HostPort, "http", ":54321", "HTTP Host:Port")
+	flag.StringVar(
+		&origin, "origin", "",
+		"Access-Control-Allow-Origin (use * for debugging).",
+	)
 	flag.BoolVar(&Debug, "debug", false, "Debug.")
 	ServerStart = time.Now()
 
@@ -43,7 +48,9 @@ func init() {
 }
 
 func reject(w http.ResponseWriter, reason string) {
-	w.Header().Set("Access-Control-Allow-Origin", "*")
+	if origin != "" {
+		w.Header().Set("Access-Control-Allow-Origin", origin)
+	}
 	j, err := json.Marshal(SubResponse{Error: reason})
 	if err != nil {
 		log.Println("Error during json.Marshal", err)
@@ -54,7 +61,9 @@ func reject(w http.ResponseWriter, reason string) {
 }
 
 func respond(w http.ResponseWriter, resp *SubResponse) {
-	w.Header().Set("Access-Control-Allow-Origin", "*")
+	if origin != "" {
+		w.Header().Set("Access-Control-Allow-Origin", origin)
+	}
 	j, err := json.Marshal(resp)
 	if err != nil {
 		log.Println("Error during json.Marshal", err)
@@ -65,7 +74,9 @@ func respond(w http.ResponseWriter, resp *SubResponse) {
 }
 
 func PubHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Access-Control-Allow-Origin", "*")
+	if origin != "" {
+		w.Header().Set("Access-Control-Allow-Origin", origin)
+	}
 	nPubAll.Add(1)
 
 	body, err := ioutil.ReadAll(r.Body)
@@ -215,8 +226,8 @@ func ServeHTTP() {
 	log.Printf("Started HTTP Server on %s.", HostPort)
 	logger := gutils.NewApacheLoggingHandler(http.DefaultServeMux, os.Stderr)
 	server := &http.Server{
-		Addr: HostPort,
-		Handler:/*http.DefaultServeMux,*/ logger,
+		Addr:    HostPort,
+		Handler: logger,
 	}
 	log.Fatal(server.ListenAndServe())
 }
