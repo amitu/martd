@@ -9,7 +9,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"sync"
 	"time"
 
 	"github.com/amitu/gutils"
@@ -29,7 +28,6 @@ var (
 	HostPort    string
 	Debug       bool
 	ServerStart time.Time
-	CIDM_lock   sync.RWMutex
 	nSub        = expvar.NewInt("nSub")
 	nList       = expvar.NewInt("nList")
 	nSubAll     = expvar.NewInt("nSubAll")

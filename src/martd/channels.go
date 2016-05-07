@@ -6,6 +6,7 @@ import (
 	"time"
 	"log"
 	"fmt"
+	"github.com/amitu/gutils"
 )
 
 type Message struct {
@@ -141,7 +142,7 @@ func (c *Channel) Pub(data []byte) int64 {
 
 func (c *Channel) HasNew(etag int64) (bool, uint) {
 	/*
-		etag symantics: if someone has passed etag != 0, means they have some
+		etag semantics: if someone has passed etag != 0, means they have some
 		old data, and want everything since then. we may have lost some data
 		by then, but we should not lose anything more.
 	*/
@@ -224,5 +225,7 @@ func stats() interface{} {
 
 	return map[string]interface{}{
 		"nChans": len(Channels),
+		"uptime":       gutils.TimeSinceHuman(ServerStart),
+		"ServerStart":  ServerStart,
 	}
 }
