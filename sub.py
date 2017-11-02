@@ -1,37 +1,33 @@
-import urllib2
-import httplib
+import urllib.request
 import argparse
 import uuid
 import json
-import time
+
 
 parser = argparse.ArgumentParser()
 parser.add_argument("channel")
 parser.add_argument("--endpoint", default="localhost:54321")
+parser.add_argument("--etag", default="0")
 args = parser.parse_args()
 
 cid = str(uuid.uuid4())
-etag = "0"
+etag = args.etag
 
 while True:
     try:
         d = json.loads(
-            urllib2.urlopen(
+            urllib.request.urlopen(
                 "http://%s/sub?cid=%s&%s=%s" % (
                     args.endpoint, cid, args.channel, etag
                 )
-            ).read()
+            ).read().decode("utf-8")
         )
-    except httplib.BadStatusLine, e:
-        print e
-        continue
-    except urllib2.URLError, e:
-        print e
-        time.sleep(1)
-        continue
+    except Exception as e:
+        print(e)
+        break
     except KeyboardInterrupt:
-        print "Ctrl-C! Sure."
+        print("Ctrl-C! Sure.")
         break
     etag = d["channels"][args.channel]["etag"]
     for payload in d["channels"][args.channel]["payload"]:
-        print payload
+        print(payload)
